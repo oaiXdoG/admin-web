@@ -79,7 +79,7 @@
 | Redis | gz `:41728` |
 | ClickHouse | gz `:38123`，账号密码在 `log-sdk/deploy/clickhouse/secrets.env`（不提交） |
 | 后端 | **部署在 gz** `:9050`（systemd `admin-background`，见 admin-background `deploy/README.md`，发布用 `deploy/deploy.sh`）；服务器配置 `/opt/admin-background/conf/application.properties` |
-| 前端 | **部署在 gz** `http://111.230.143.165/`（nginx 80 端口默认站点，`/api` 代理到 `:9050`，发布用 `deploy/deploy.sh`，见 `deploy/README.md`）；本机调试 `pnpm dev`，`:5173`，`/api` 代理到 `API_PROXY_TARGET`，本机 `apps/web-antd/.env.development.local` 已设为 `http://111.230.143.165:9050`（不提交） |
+| 前端 | **部署在 gz** `http://111.230.143.165/`（nginx 80 端口默认站点，`/api` 代理到 `:9050`，发布用 `deploy/servers/gz/deploy.sh`）；本机调试 `pnpm dev`，`:5173`，`/api` 代理到 `API_PROXY_TARGET`，本机 `apps/web-antd/.env.development.local` 已设为 `http://111.230.143.165:9050`（不提交） |
 
 - 初始管理员：账号 `admin`，密码见 admin-background `target/server.log` 中 `SystemInitializationService` 的 WARN 日志；用户应已在个人设置中修改。
 - 数据库当前数据：项目「测试项目」（用户自建），其余为初始化数据。

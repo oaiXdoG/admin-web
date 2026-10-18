@@ -17,8 +17,6 @@ publicHoistPattern:
   - oxlint
   - stylelint
   - '*postcss*'
-  - '@commitlint/*'
-  - czg
 
 strictPeerDependencies: false
 autoInstallPeers: true
@@ -39,8 +37,6 @@ catalog:
   '@changesets/cli': ^3.0.3
   '@changesets/git': ^4.0.1
   '@clack/prompts': ^1.7.0
-  '@commitlint/cli': ^21.2.1
-  '@commitlint/config-conventional': ^21.2.0
   '@ctrl/tinycolor': ^4.2.0
   '@eslint-community/eslint-plugin-eslint-comments': ^4.7.2
   '@eslint/js': ^10.0.1
@@ -106,12 +102,9 @@ catalog:
   circular-dependency-scanner: ^3.0.1
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
-  commitlint-plugin-function-rules: ^5.0.1
   consola: ^3.4.2
   cross-env: ^10.1.0
   cspell: ^10.3.3
-  cz-git: ^1.14.0
-  czg: ^1.14.0
   dayjs: ^1.11.21
   defu: ^6.1.7
   dotenv: ^17.4.2

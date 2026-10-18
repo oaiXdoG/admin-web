@@ -1,31 +1,54 @@
-# 部署
+# 打包与运行
 
-前端部署在 gz（`111.230.143.165`），由服务器上已有的 nginx 提供，访问地址 `http://111.230.143.165/`。
+## 环境
 
-## 发布
+Node `^22.18.0 || ^24.12.0`，pnpm 11（`package.json` 的 `packageManager` 已指定）。首次执行 `pnpm install`。
 
-```bash
-deploy/deploy.sh        # 默认 SSH 主机 gz
-```
-
-脚本做的事：
-
-1. 本机 `pnpm build:antd`（`.env.production` 里 `VITE_COMPRESS=gzip`，同时生成 `.gz` 文件）。
-2. 上传到 `/opt/admin-front/releases/<时间>/`，把 `/opt/admin-front/current` 切到新版本，只保留最近 5 个版本。
-3. 复制 `deploy/nginx.conf` 到 `/etc/nginx/sites-available/admin-front` 并启用，`nginx -t` 通过后重载。
-
-## nginx
-
-- 作为 80 端口的 `default_server`（按 IP 访问），替换了系统自带的 `default` 站点（只是欢迎页，文件仍在 `sites-available/default`）。`svn.oaixdog.com` 按域名匹配，不受影响。
-- `/api/` 反向代理到本机后端 `127.0.0.1:9050`，前端与接口同源，不需要跨域配置。
-- `gzip_static` 直接发送构建时生成的 `.gz`；`js/`、`css/`、`jse/` 和 `_app-config-*.js` 带哈希，缓存一年；`index.html` 不缓存，发布后刷新即生效。
-- 没有域名和证书，只有 HTTP/1.1。正式使用建议配域名 + HTTPS（同时启用 HTTP/2）。
-
-## 回滚
+## 本地开发
 
 ```bash
-ssh gz 'ls -1t /opt/admin-front/releases'
-ssh gz 'cd /opt/admin-front && ln -sfn releases/<版本> current.tmp && mv -Tf current.tmp current'
+pnpm dev
 ```
 
-切换后无需重载 nginx。
+## 打包
+
+```bash
+pnpm build:antd
+```
+
+产物在 `apps/web-antd/dist/`，是纯静态文件：`index.html`、`js/`、`css/`、`jse/`、`_app-config-*.js` 等。每个文件旁有预压缩的 `.gz`（`VITE_COMPRESS=gzip`）。
+
+本机预览产物：
+
+```bash
+pnpm --filter @vben/web-antd preview
+```
+
+## 运行要求
+
+产物可以放在任意静态文件服务器上，需要满足：
+
+| 要求 | 说明 |
+| --- | --- |
+| 路由回退 | 找不到的路径返回 `index.html`（history 路由） |
+| 缓存 | `index.html` 不缓存；`js/`、`css/`、`jse/` 和 `_app-config-*.js` 文件名带哈希，可以长期缓存 |
+| 预压缩（可选） | 支持时直接发送 `.gz` 文件 |
+
+## 接口地址
+
+接口请求是 `<VITE_GLOB_API_URL><业务路径>`。`VITE_GLOB_API_URL` 是部署时反向代理给接口设置的入口，按实际入口填写。
+
+## 打包配置
+
+在 `apps/web-antd/.env.production` 中修改，修改后重新打包：
+
+| 项 | 当前值 | 说明 |
+| --- | --- | --- |
+| `VITE_GLOB_API_URL` | `/api` | 接口入口，见上文 |
+| `VITE_BASE` | `/` | 部署在子路径时修改 |
+| `VITE_ROUTER_HISTORY` | `history` | 改为 `hash` 时不需要路由回退 |
+| `VITE_COMPRESS` | `gzip` | 预压缩：`none` / `gzip` / `brotli` |
+
+## 发布到服务器
+
+每台服务器的发布脚本和配置放在 `deploy/servers/<服务器名>/`。

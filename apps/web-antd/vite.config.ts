@@ -5,8 +5,9 @@ import { defineConfig } from '@vben/vite-config';
 import { loadEnv } from 'vite';
 
 export default defineConfig(async ({ mode }) => {
-  // 开发时 /api 开头的请求都转发到后端，地址在 .env.development 的 API_PROXY_TARGET 里配置。
+  // 开发时浏览器请求 VITE_GLOB_API_URL 开头的接口，由 vite 去掉这个前缀后转发到后端 API_PROXY_TARGET
   const env = loadEnv(mode, process.cwd(), '');
+  const prefix = env.VITE_GLOB_API_URL || '/api';
   const target = env.API_PROXY_TARGET || 'http://localhost:9050';
 
   return {
@@ -19,8 +20,9 @@ export default defineConfig(async ({ mode }) => {
       },
       server: {
         proxy: {
-          '/api': {
+          [prefix]: {
             changeOrigin: true,
+            rewrite: (path) => path.slice(prefix.length),
             target,
           },
         },

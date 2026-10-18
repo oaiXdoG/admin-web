@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# 本机执行：构建生产包（.env.production 开启了预压缩 gzip），上传到服务器新版本目录，切换 current 链接并重载 nginx。
-# 保留最近 5 个版本，回滚见 deploy/README.md。用法：deploy/deploy.sh [SSH 主机，默认 gz]
+# gz 的发布脚本：本机构建，上传到 gz 的 /opt/admin-front/releases/<时间>，切换 current 软链，更新 nginx 站点并重载。
+# 保留最近 5 个版本；回滚：ssh gz 'cd /opt/admin-front && ln -sfn releases/<版本> current.tmp && mv -Tf current.tmp current'
+# 用法：deploy/servers/gz/deploy.sh
 set -euo pipefail
 
-HOST="${1:-gz}"
+HOST=gz
 RELEASE="$(date +%Y%m%d-%H%M%S)"
-cd "$(dirname "$0")/.."
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE/../../.."
 
 pnpm build:antd
 DIST=apps/web-antd/dist
 
 ssh "$HOST" "mkdir -p /opt/admin-front/releases/$RELEASE"
 rsync -az --delete "$DIST"/ "$HOST":/opt/admin-front/releases/"$RELEASE"/
-rsync -az deploy/nginx.conf "$HOST":/etc/nginx/sites-available/admin-front
+rsync -az "$HERE/nginx.conf" "$HOST":/etc/nginx/sites-available/admin-front
 ssh "$HOST" "set -e
 cd /opt/admin-front
 ln -sfn releases/$RELEASE current.tmp && mv -Tf current.tmp current
