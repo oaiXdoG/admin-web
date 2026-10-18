@@ -215,3 +215,9 @@ ClickHouse `38123` 端口的来源 IP 限制：用户决定不处理。
 - gz 部署（2026-10-18 17:49～17:58）：已执行 `.ops/upgrade-service-binding.sql`，类型 login / logic / callback 补了同名编码，login、daoshinvgui 进程补了类型；后台、Agent 0.4.0（只替换 jar，保留 127.0.0.1 baseUrl）、前端已发布；三个业务服打包后用 rsync 增量同步到 `/usr/local/games/{login,callback,daoshinvgui}`（没走页面部署：包约 70MB，上传太慢），systemctl 重启，并手动把 Agent `/opt/admin-agent/state.properties` 中 3/4/5 的启动版本改为 2（否则显示待重启）。部署前备份 `/root/games-backup-20261018.tgz`。三个服务日志均为「管理后台上报成功」，instanceId 3/4/5 对应进程 ID。
 - 本次发布带上了三个业务服仓库里未提交的 log-sdk 接入改动（`log.dir=logs/event`）。
 - 页面（进程列表服务列、未托管服务、上报配置、数据中心选区）还没有在浏览器里走查。
+
+### 数据源按业务类型发现（2026-10-18，已部署 gz 并在浏览器走通）
+- 约定 `docs/data-source-by-type-plan.md`，示意 `docs/mockups/data-source-by-type.html`。
+- `data_source.type`：`http`（固定地址）/ `discover`（按业务类型发现，`service_type` = 业务类型编码）；原 `zone` 取消，gz 已执行 `.ops/upgrade-data-discover.sql`，「游戏服」数据源转为 discover · logic。
+- 目标取该类型在线且 gmPort > 0 的上报：logic 按区（key = 区号），其他按节点（key = nodeId，空则 instanceId）；数据查询 logic 选「区服」，其他选「节点」，都默认第一个。接口 `/data/source/targets` 取代 `/zones`，查询参数 `targets`，结果 `_target`，`/data/source/list` 顶层带 `serviceTypes`（不依赖进程管理权限）。
+- 登录服、回调服 gmPort 为 0，要被查询需先加 GM 查询接口。

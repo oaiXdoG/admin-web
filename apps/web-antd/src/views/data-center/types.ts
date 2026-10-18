@@ -12,6 +12,8 @@ export interface DataTemplate {
   sourceName?: string;
   /** 数据源类型，模板列表没返回时为 undefined */
   sourceType?: DataSourceType;
+  /** 数据源的业务类型编码，logic 按区查询，其他 discover 类型按节点查询 */
+  sourceServiceType?: string;
   name: string;
   query: string;
   params: DataParam[];
@@ -37,6 +39,7 @@ export function parseDataTemplate(record: DataTemplateRecord): DataTemplate {
     query: record.query,
     sourceId: record.sourceId,
     sourceName: record.sourceName,
+    sourceServiceType: record.sourceServiceType,
     sourceType: record.sourceType,
   };
 }

@@ -110,7 +110,7 @@ const [ProcessForm, formApi] = useVbenForm({
       component: 'Textarea',
       componentProps: {
         autoSize: { maxRows: 8, minRows: 3 },
-        placeholder: '一行一个，例如\n-Xms2g\n-Xmx2g\n-Dserver.zone-id=2（覆盖配置文件里的值）',
+        placeholder: '一行一个，例如\n-Xms2g\n-Xmx2g\n-XX:MaxMetaspaceSize=256m',
       },
       fieldName: 'jvmOptions',
       label: 'JVM 参数',

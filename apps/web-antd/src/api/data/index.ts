@@ -2,8 +2,9 @@ import type {
   BusinessQuery,
   DataQueryResult,
   DataSourceRecord,
+  DataSourceServiceType,
+  DataSourceTarget,
   DataSourceWrite,
-  DataSourceZone,
   DataTemplateRecord,
   DataTemplateWrite,
 } from '#/api/types';
@@ -17,13 +18,17 @@ function trimSource(data: DataSourceWrite) {
     secret: data.secret ?? '',
     timeoutMs: data.timeoutMs,
     network: data.network,
+    serviceType: data.type === 'discover' ? data.serviceType : '',
     type: data.type,
-    url: data.type === 'zone' ? '' : data.url.trim(),
+    url: data.type === 'discover' ? '' : data.url.trim(),
   };
 }
 
 export async function getDataSourcesApi(projectId: number) {
-  return requestClient.post<{ list: DataSourceRecord[] }>('/data/source/list', {
+  return requestClient.post<{
+    list: DataSourceRecord[];
+    serviceTypes: DataSourceServiceType[];
+  }>('/data/source/list', {
     projectId,
   });
 }
@@ -59,7 +64,7 @@ export async function removeDataSourceApi(projectId: number, sourceId: number) {
 
 /**
  * 用表单里的值测试连接；sourceId 有值且密钥留空时用已保存的密钥。
- * zone 类型调用第一个可用的区，zones 为发现的区（http 类型为空列表）
+ * discover 类型调用第一个可查询的目标，targets 为发现的目标（http 类型为空列表）
  */
 export async function testDataSourceApi(
   projectId: number,
@@ -67,31 +72,33 @@ export async function testDataSourceApi(
     secret?: string;
     sourceId?: number;
     network: DataSourceWrite['network'];
+    serviceType: string;
     timeoutMs: number;
     type: DataSourceWrite['type'];
     url: string;
   },
 ) {
-  return requestClient.post<{ queryCount: number; zones: DataSourceZone[] }>(
-    '/data/source/test',
-    {
-      projectId,
-      secret: data.secret ?? '',
-      network: data.network,
-      sourceId: data.sourceId,
-      timeoutMs: data.timeoutMs,
-      type: data.type,
-      url: data.type === 'zone' ? '' : data.url.trim(),
-    },
-  );
+  return requestClient.post<{
+    queryCount: number;
+    targets: DataSourceTarget[];
+  }>('/data/source/test', {
+    projectId,
+    secret: data.secret ?? '',
+    network: data.network,
+    serviceType: data.type === 'discover' ? data.serviceType : '',
+    sourceId: data.sourceId,
+    timeoutMs: data.timeoutMs,
+    type: data.type,
+    url: data.type === 'discover' ? '' : data.url.trim(),
+  });
 }
 
-/** zone 类型数据源当前可查询的区，按区 ID 排序；http 类型返回空列表 */
-export async function getSourceZonesApi(projectId: number, sourceId: number) {
-  return requestClient.post<{ list: DataSourceZone[] }>('/data/source/zones', {
-    projectId,
-    sourceId,
-  });
+/** discover 类型数据源当前可查询的目标（logic 按区号排序，其他按 nodeId 排序）；http 类型返回空列表 */
+export async function getSourceTargetsApi(projectId: number, sourceId: number) {
+  return requestClient.post<{ list: DataSourceTarget[] }>(
+    '/data/source/targets',
+    { projectId, sourceId },
+  );
 }
 
 /** 数据源提供的查询清单 */
@@ -141,14 +148,14 @@ export async function removeDataTemplateApi(
   });
 }
 
-/** params 是参数值对象，按模板的参数定义提交；zoneIds 只对 zone 类型数据源生效 */
+/** params 是参数值对象，按模板的参数定义提交；targets 为目标 key，只对 discover 类型数据源生效 */
 export async function queryDataApi(
   projectId: number,
   templateId: number,
   params: Record<string, unknown>,
   page: number,
   pageSize: number,
-  zoneIds: number[] = [],
+  targets: string[] = [],
 ) {
   return requestClient.post<DataQueryResult>(
     '/data/query',
@@ -157,8 +164,8 @@ export async function queryDataApi(
       pageSize,
       params: JSON.stringify(params),
       projectId,
+      targets,
       templateId,
-      zoneIds,
     },
     { timeout: 70_000 },
   );
@@ -169,11 +176,11 @@ export async function exportDataApi(
   projectId: number,
   templateId: number,
   params: Record<string, unknown>,
-  zoneIds: number[] = [],
+  targets: string[] = [],
 ) {
   return requestClient.post<DataQueryResult>(
     '/data/query/export',
-    { params: JSON.stringify(params), projectId, templateId, zoneIds },
+    { params: JSON.stringify(params), projectId, targets, templateId },
     { timeout: 300_000 },
   );
 }

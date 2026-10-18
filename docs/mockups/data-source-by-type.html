@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>数据源：按业务类型发现 · 交互示意</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f0f2f5; font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f1f1f; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 24px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #666; margin-bottom: 24px; }
+  .step { margin: 36px 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  .step b { background: #1677ff; color: #fff; border-radius: 12px; padding: 0 10px; font-size: 13px; }
+  .step h2 { font-size: 17px; margin: 0; }
+  .note { color: #666; margin: 0 0 12px; }
+  .screen { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow: hidden; }
+  .bar { background: #fafafa; border-bottom: 1px solid #f0f0f0; padding: 8px 16px; color: #888; font-size: 12px; }
+  .body { padding: 16px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .btn { display: inline-block; border: 1px solid #d9d9d9; border-radius: 6px; padding: 3px 12px; background: #fff; font-size: 13px; white-space: nowrap; }
+  .btn.primary { background: #1677ff; border-color: #1677ff; color: #fff; }
+  .link { color: #1677ff; margin-right: 10px; white-space: nowrap; }
+  .link.gray { color: #bbb; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #fafafa; text-align: left; font-weight: 500; padding: 9px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .tag { display: inline-block; border-radius: 4px; padding: 0 7px; font-size: 12px; line-height: 20px; border: 1px solid; margin-right: 4px; white-space: nowrap; }
+  .g { color: #389e0d; background: #f6ffed; border-color: #b7eb8f; }
+  .o { color: #d46b08; background: #fff7e6; border-color: #ffd591; }
+  .r { color: #cf1322; background: #fff1f0; border-color: #ffa39e; }
+  .b { color: #0958d9; background: #e6f4ff; border-color: #91caff; }
+  .n { color: #595959; background: #fafafa; border-color: #d9d9d9; }
+  .p { color: #531dab; background: #f9f0ff; border-color: #d3adf7; }
+  .muted { color: #999; font-size: 12px; }
+  code, pre { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 12px 14px; border-radius: 6px; margin: 0; overflow: auto; line-height: 1.6; }
+  pre .c { color: #6a9955; } pre .k { color: #9cdcfe; } pre .v { color: #ce9178; } pre .hl { background: #264f78; }
+  .modal { width: 640px; margin: 8px auto; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.15); background: #fff; }
+  .modal .hd { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; font-weight: 600; display: flex; justify-content: space-between; }
+  .modal .ft { padding: 10px 20px; border-top: 1px solid #f0f0f0; text-align: right; }
+  .modal .ft .btn { margin-left: 8px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .card { border: 1px solid #d9d9d9; border-radius: 8px; padding: 12px; }
+  .card.on { border-color: #1677ff; background: #f0f7ff; box-shadow: 0 0 0 2px rgba(22,119,255,.15); }
+  .card .t { font-weight: 600; } .card .c { font-family: Menlo, monospace; color: #1677ff; font-size: 12px; }
+  .card .d { color: #888; font-size: 12px; margin-top: 4px; }
+  .form .row { display: flex; align-items: center; margin-bottom: 10px; }
+  .form label { width: 96px; text-align: right; padding-right: 12px; color: #555; flex-shrink: 0; }
+  .input { flex: 1; border: 1px solid #d9d9d9; border-radius: 6px; padding: 4px 10px; color: #333; min-height: 30px; }
+  .input.ro { background: #f5f5f5; color: #888; }
+  .alert { border: 1px solid #91caff; background: #e6f4ff; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+  .alert.warn { border-color: #ffd591; background: #fff7e6; }
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid #f0f0f0; margin-bottom: 12px; }
+  .tabs span { padding: 6px 0; color: #555; }
+  .tabs span.on { color: #1677ff; border-bottom: 2px solid #1677ff; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .drawer { margin-left: auto; width: 560px; border-left: 1px solid #f0f0f0; box-shadow: -6px 0 16px rgba(0,0,0,.08); background: #fff; }
+  .desc { display: grid; grid-template-columns: 110px 1fr; border: 1px solid #f0f0f0; border-radius: 6px; overflow: hidden; font-size: 13px; }
+  .desc div { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; }
+  .desc div:nth-child(odd) { background: #fafafa; color: #666; }
+  .flow { display: flex; align-items: stretch; gap: 0; }
+  .flow .box { flex: 1; border: 1px solid #d9d9d9; border-radius: 8px; padding: 10px 12px; background: #fff; font-size: 13px; }
+  .flow .box .t { font-weight: 600; margin-bottom: 4px; }
+  .flow .arr { width: 34px; display: flex; align-items: center; justify-content: center; color: #1677ff; font-size: 20px; }
+  .legend td { border: none; padding: 4px 10px 4px 0; }
+  .pin { display: inline-block; background: #ff4d4f; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; text-align: center; line-height: 18px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>数据源：按业务类型发现 · 交互示意</h1>
+  <div class="sub">数据源不再只为游戏服设计：选一个业务类型（logic / login / callback），后台从该类型的在线上报里取查询地址（innerHost 或 host + GM 端口）。游戏服按区列出，其他类型按节点列出。</div>
+
+  <div class="step"><b>总览</b><h2>查询地址从哪来</h2></div>
+  <div class="screen"><div class="body">
+    <div class="flow">
+      <div class="box"><div class="t">① 业务服上报</div>type、nodeId、区号（只有 logic）<br/>host / innerHost<br/><code>gmPort</code>（0 = 没有查询接口）</div>
+      <div class="arr">→</div>
+      <div class="box"><div class="t">② 数据源</div>来源「按业务类型发现」<br/>业务类型 <code>logic</code><br/>连接方式 内网 / 公网</div>
+      <div class="arr">→</div>
+      <div class="box"><div class="t">③ 可查询目标</div>该类型、在线、gmPort &gt; 0 的上报<br/>logic：1 区、2 区…<br/>其他：login-1、login-2…</div>
+      <div class="arr">→</div>
+      <div class="box"><div class="t">④ 数据查询</div>选模板 → 选区服 / 节点<br/>并行查询、合并结果<br/>失败的单独列出</div>
+    </div>
+  </div></div>
+
+  <div class="step"><b>1</b><h2>数据源列表</h2></div>
+  <div class="screen"><div class="bar">页面：数据中心 → 数据源</div><div class="body">
+    <div class="toolbar"><span class="btn primary">新增数据源</span></div>
+    <table>
+      <tr><th>名称</th><th>来源</th><th>接口地址 / 可查询目标</th><th>超时</th><th>查询模板</th><th>备注</th><th>操作</th></tr>
+      <tr><td>游戏服</td><td>按业务类型发现<br/><span class="muted">游戏服 logic · 内网</span></td><td><span class="tag g">在线 1 个区</span></td><td>10 秒</td><td>1</td><td class="muted">—</td><td><span class="link">测试连接</span><span class="link">编辑</span><span class="link">删除</span></td></tr>
+      <tr><td>登录服</td><td>按业务类型发现<br/><span class="muted">登录服 login · 内网</span></td><td><span class="tag o" title="有 1 个在线节点，但 GM 端口为 0（没有查询接口）">0 个可查询</span></td><td>10 秒</td><td>0</td><td class="muted">等登录服加查询接口</td><td><span class="link">测试连接</span><span class="link">编辑</span><span class="link">删除</span></td></tr>
+      <tr><td>第三方统计</td><td>固定地址</td><td>http://10.0.0.20:8080</td><td>10 秒</td><td>2</td><td class="muted">—</td><td><span class="link">测试连接</span><span class="link">编辑</span><span class="link">删除</span></td></tr>
+    </table>
+  </div></div>
+
+  <div class="step"><b>2</b><h2>新增 / 编辑数据源</h2></div>
+  <p class="note">来源选「按业务类型发现」时，不填地址，改选业务类型（来自「进程管理 → 业务类型」中有编码的类型）。「固定地址」保持现在的样子。</p>
+  <div class="split">
+    <div class="screen"><div class="bar">弹窗：新增数据源（按业务类型发现）</div><div class="body" style="background:#f5f5f5">
+      <div class="modal" style="width:100%">
+        <div class="hd"><span>新增数据源</span><span class="muted">✕</span></div>
+        <div style="padding:16px 20px" class="form">
+          <div class="row"><label>名称</label><div class="input">游戏服</div></div>
+          <div class="row"><label>来源</label><div class="input"><span class="tag b">按业务类型发现</span> <span class="muted">固定地址</span></div></div>
+          <div class="row"><label>业务类型</label><div class="input">游戏服（logic） ▾</div></div>
+          <div class="row"><label>连接方式</label><div class="input"><span class="tag b">内网</span> <span class="muted">公网</span></div></div>
+          <div class="row"><label>签名密钥</label><div class="input">••••••••（业务服 gm.secret）</div></div>
+          <div class="row"><label>超时时间</label><div class="input">10 秒</div></div>
+          <div class="alert" style="margin:8px 0 0">查询地址取该业务类型在线上报的 <code>innerHost:gmPort</code>（公网用 <code>host:gmPort</code>）；gmPort 为 0 的节点没有查询接口，不参与。游戏服按区列出，其他类型按节点列出。</div>
+        </div>
+        <div class="ft"><span class="btn">测试连接</span><span class="btn">取消</span><span class="btn primary">保存</span></div>
+      </div>
+    </div></div>
+    <div class="screen"><div class="bar">「测试连接」结果</div><div class="body">
+      <div class="alert" style="border-color:#b7eb8f;background:#f6ffed">连接成功：发现 2 个区，提供 3 个查询</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+        <span class="tag g" title="http://10.1.0.14:9021">1 区</span><span class="tag g" title="http://10.1.0.15:9021">2 区</span><span class="tag r" title="签名错误">3 区 ✕</span>
+      </div>
+      <div class="muted" style="margin-bottom:6px">业务类型选 login 时：</div>
+      <div class="alert" style="border-color:#b7eb8f;background:#f6ffed">连接成功：发现 2 个节点，提供 1 个查询</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+        <span class="tag g" title="http://10.1.0.14:9031">login-1</span><span class="tag g" title="http://10.1.0.16:9031">login-2</span>
+      </div>
+      <div class="muted" style="margin-bottom:6px">没有可查询的目标时：</div>
+      <div class="alert warn">没有可查询的节点：登录服（login）当前在线 1 个，但 GM 端口都是 0（还没有查询接口）。</div>
+    </div></div>
+  </div>
+
+  <div class="step"><b>3</b><h2>数据查询：按类型显示「区服」或「节点」</h2></div>
+  <div class="split">
+    <div class="screen"><div class="bar">模板的数据源是 logic</div><div class="body">
+      <div class="form">
+        <div class="row"><label>查询模板</label><div class="input">玩家查询（游戏服）</div></div>
+        <div class="row"><label>区服</label><div class="input"><span class="tag b">1 区 ✕</span><span class="tag b">2 区 ✕</span> <span class="muted">全部</span></div></div>
+      </div>
+      <table style="margin-top:8px">
+        <tr><th>区服</th><th>玩家 ID</th><th>昵称</th><th>本周积分</th></tr>
+        <tr><td>1 区</td><td>10000026</td><td>user3</td><td>168790</td></tr>
+        <tr><td>2 区</td><td>20000003</td><td>玩家丙</td><td>520</td></tr>
+      </table>
+    </div></div>
+    <div class="screen"><div class="bar">模板的数据源是 login</div><div class="body">
+      <div class="form">
+        <div class="row"><label>查询模板</label><div class="input">账号查询（登录服）</div></div>
+        <div class="row"><label>节点</label><div class="input"><span class="tag b">login-1 ✕</span> <span class="muted">全部</span></div></div>
+      </div>
+      <table style="margin-top:8px">
+        <tr><th>节点</th><th>账号 ID</th><th>平台</th><th>创建时间</th></tr>
+        <tr><td>login-1</td><td>1024</td><td>douyin</td><td>2026-10-18 15:13</td></tr>
+      </table>
+      <div class="muted" style="margin-top:8px">登录服多台共用一个数据库时，通常只需要查任意一个节点；默认选第一个。</div>
+    </div></div>
+  </div>
+
+  <div class="step"><b>4</b><h2>与现在的区别</h2></div>
+  <div class="screen"><div class="body">
+    <table>
+      <tr><th></th><th>现在</th><th>改后</th></tr>
+      <tr><td>来源选项</td><td>固定地址 / 按区自动发现</td><td>固定地址 / 按业务类型发现（再选业务类型）</td></tr>
+      <tr><td>能发现的服务</td><td>只有游戏服（type=logic）</td><td>任何有编码的业务类型</td></tr>
+      <tr><td>查询目标</td><td>区服</td><td>logic：区服；其他：节点（nodeId）</td></tr>
+      <tr><td>已有的「游戏服」数据源</td><td>按区自动发现</td><td>升级脚本自动改为「按业务类型发现 · logic」，不用重新配置</td></tr>
+      <tr><td>业务服要做的</td><td>—</td><td>login / callback 想被查询，需要加 GM 查询接口并上报 gmPort（另行开发）</td></tr>
+    </table>
+  </div></div>
+</div>
+</body>
+</html>

@@ -76,7 +76,7 @@ function remove(template: JvmTemplateRecord) {
   <Modal :footer="null" :open="open" :width="720" title="JVM 参数模板" @cancel="emit('close'); editing = null">
     <div class="mb-4">
       <Alert
-        message="把多个进程共用的参数（GC、编码、时区等）放在模板里，在进程的「JVM 模板」里选择；进程自己的 JVM 参数只填不同的部分（例如 -Xms / -Xmx、-Dserver.zone-id）。启动时模板参数在前、进程参数在后。修改模板后，用到它的进程会显示「待重启」。"
+        message="把多个进程共用的参数（GC、编码、时区等）放在模板里，在进程的「JVM 模板」里选择；进程自己的 JVM 参数只填不同的部分（例如 -Xms / -Xmx）。启动时模板参数在前、进程参数在后。修改模板后，用到它的进程会显示「待重启」。"
         show-icon
         type="info"
       />

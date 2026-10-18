@@ -316,10 +316,10 @@ export interface BackupInfo {
 }
 
 /** 数据源：业务服务器的查询接口，密钥不返回，只返回是否已设置 */
-/** http：固定地址；zone：按区自动发现（从 ZooKeeper 读取各区游戏服地址，url 为空） */
-export type DataSourceType = 'http' | 'zone';
+/** http：固定地址；discover：按业务类型发现（从该类型的在线上报里取查询地址，url 为空） */
+export type DataSourceType = 'discover' | 'http';
 
-/** 按区自动发现的连接方式：inner 内网地址，public 公网地址（后台和游戏服不在同一个内网时） */
+/** 按业务类型发现的连接方式：inner 内网地址，public 公网地址（后台和业务服不在同一个内网时） */
 export type DataSourceNetwork = 'inner' | 'public';
 
 export interface DataSourceRecord {
@@ -327,7 +327,13 @@ export interface DataSourceRecord {
   name: string;
   type: DataSourceType;
   network: DataSourceNetwork;
+  /** 业务类型编码（server_process_type.code），type 为 discover 时有值 */
+  serviceType: string;
+  /** 业务类型名称，匹配不到为空 */
+  serviceTypeName: string;
   url: string;
+  /** discover 类型当前可查询的目标数；http 为 null */
+  targetCount: null | number;
   secretSet: boolean;
   timeoutMs: number;
   remark: string;
@@ -341,7 +347,9 @@ export interface DataSourceWrite {
   name: string;
   type: DataSourceType;
   network: DataSourceNetwork;
-  /** type 为 zone 时为空 */
+  /** type 为 discover 时必填 */
+  serviceType: string;
+  /** type 为 discover 时为空 */
   url: string;
   secret?: string;
   timeoutMs: number;
@@ -373,6 +381,8 @@ export interface DataTemplateRecord {
   sourceName?: string;
   /** 数据源类型；后端未返回时由数据查询页按区服列表判断 */
   sourceType?: DataSourceType;
+  /** 数据源的业务类型编码；logic 按区查询，其他 discover 类型按节点查询 */
+  sourceServiceType?: string;
   name: string;
   query: string;
   params: string;
@@ -390,17 +400,28 @@ export interface DataTemplateWrite {
 }
 
 /** 业务服务器返回的结果行原样透传 */
-/** 按区自动发现的数据源当前可查询的区；url 为该区的查询接口地址 */
-export interface DataSourceZone {
-  zoneId: number;
+/**
+ * 按业务类型发现的数据源当前可查询的目标；url 为查询接口地址。
+ * logic 按区：key 为区号字符串，zoneId 为区号；其他类型按节点：key 为 nodeId，zoneId 为 null
+ */
+/** 数据源可选的业务类型（业务类型中编码非空的），随数据源列表返回 */
+export interface DataSourceServiceType {
+  code: string;
+  name: string;
+}
+
+export interface DataSourceTarget {
+  key: string;
+  zoneId: null | number;
+  nodeId: string;
   url: string;
 }
 
-/** zone 类型数据源：每行带 _zone（区 ID），查询失败或离线的区记在 failures */
+/** discover 类型数据源：每行带 _target（目标 key），查询失败或离线的目标记在 failures */
 export interface DataQueryResult {
   total: number;
   list: Record<string, unknown>[];
-  failures: { message: string; zoneId: number }[];
+  failures: { message: string; target: string }[];
 }
 
 /** 服务器管理：主机指标（cpu 为百分比，内存和磁盘为字节，网络为字节/秒，uptime 为秒），time 为采集时间 */
