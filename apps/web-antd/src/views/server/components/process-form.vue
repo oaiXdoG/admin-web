@@ -54,10 +54,9 @@ const [ProcessForm, formApi] = useVbenForm({
   },
   schema: [
     {
-      component: 'RadioGroup',
+      component: 'Select',
       componentProps: () => ({
-        buttonStyle: 'solid',
-        optionType: 'button',
+        placeholder: '请选择业务类型',
         options: props.types.map((item) => ({
           label: item.code ? `${item.name}（${item.code}）` : item.name,
           value: item.id,
