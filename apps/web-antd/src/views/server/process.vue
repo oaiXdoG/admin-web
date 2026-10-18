@@ -5,6 +5,7 @@ import type {
   ProcessRecord,
   ProcessTypeRecord,
   ServerRecord,
+  UnmanagedServiceRecord,
 } from '#/api/types';
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -14,7 +15,19 @@ import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Drawer, message, Modal, Select, Space, Tag, Tooltip } from 'ant-design-vue';
+import {
+  Badge,
+  Button,
+  Drawer,
+  message,
+  Modal,
+  Select,
+  Space,
+  TabPane,
+  Tabs,
+  Tag,
+  Tooltip,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -23,6 +36,7 @@ import {
   getProcessesApi,
   getProcessTypesApi,
   getServersApi,
+  getUnmanagedServicesApi,
   operateProcessesApi,
   removeProcessApi,
 } from '#/api';
@@ -31,16 +45,21 @@ import { useProjectStore } from '#/store';
 import DeployModal from './components/deploy-modal.vue';
 import ProcessDetail from './components/process-detail.vue';
 import ProcessForm from './components/process-form.vue';
+import ReportConfigModal from './components/report-config-modal.vue';
 import TaskList from './components/task-list.vue';
 import TemplateModal from './components/template-modal.vue';
 import TypeModal from './components/type-modal.vue';
+import UnmanagedList from './components/unmanaged-list.vue';
 import {
   actionNames,
   formatBytes,
   formatDuration,
   formatPercent,
+  formatReportTime,
   processStateTag,
   serverStatusTags,
+  serviceSummary,
+  serviceTag,
 } from './format';
 
 type Action = 'restart' | 'start' | 'stop';
@@ -69,6 +88,11 @@ const typeOpen = ref(false);
 const deploying = ref<null | ProcessRecord>(null);
 const tasksOpen = ref(false);
 const detailId = ref<null | number>(null);
+const tab = ref<'managed' | 'unmanaged'>('managed');
+const unmanaged = ref<UnmanagedServiceRecord[]>([]);
+const reportConfigOpen = ref(false);
+/** 新增进程时的预填值（从「未托管服务」纳入管理） */
+const formPreset = ref<null | { serverId?: number; typeId?: number }>(null);
 let timer: ReturnType<typeof setTimeout> | undefined;
 let unmounted = false;
 
@@ -85,6 +109,7 @@ const visible = computed(() =>
       (typeFilter.value === undefined || item.typeId === typeFilter.value),
   ),
 );
+const onlineUnmanaged = computed(() => unmanaged.value.filter((item) => item.online).length);
 const detail = computed(() => processes.value.find((item) => item.id === detailId.value) ?? null);
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -118,6 +143,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '服务器',
       },
       { field: 'state', minWidth: 200, slots: { default: 'state' }, title: '状态' },
+      { field: 'service', minWidth: 100, slots: { default: 'service' }, title: '服务' },
+      {
+        align: 'left',
+        field: 'serviceInfo',
+        formatter: ({ row }) => serviceSummary(row.service),
+        minWidth: 180,
+        title: '服务信息',
+      },
+      {
+        field: 'reportTime',
+        formatter: ({ row }) => formatReportTime(row.service?.reportTime),
+        minWidth: 160,
+        title: '最近上报',
+      },
       { field: 'pid', formatter: ({ row }) => row.metric?.pid || '—', title: 'PID', minWidth: 90 },
       { field: 'cpu', formatter: ({ row }) => formatPercent(row.metric?.cpu), title: 'CPU', minWidth: 80 },
       {
@@ -166,10 +205,23 @@ function syncSelection() {
   selected.value = (gridApi.grid?.getCheckboxRecords(true) ?? []).map((item: ProcessRecord) => item.id);
 }
 
-/** 自动刷新不显示加载状态；有指令刚完成时提示结果 */
+/** 未托管服务：失败不影响托管进程的刷新 */
+async function loadUnmanaged() {
+  try {
+    unmanaged.value = (await getUnmanagedServicesApi(projectId.value)).list;
+  } catch {
+    // 错误信息已由请求拦截器提示
+  }
+}
+
+function onTabChange() {
+  if (tab.value === 'unmanaged') void loadUnmanaged();
+}
+
+/** 自动刷新不显示加载状态；有指令刚完成时提示结果；未托管服务跟着一起刷新（标签上显示在线数量） */
 async function load() {
   const before = new Map(processes.value.map((item) => [item.id, item.task]));
-  const { list } = await getProcessesApi(projectId.value);
+  const [{ list }] = await Promise.all([getProcessesApi(projectId.value), loadUnmanaged()]);
   processes.value = list;
   gridApi.setGridOptions({ data: visible.value });
   for (const item of list) {
@@ -196,13 +248,23 @@ function onFilterChange() {
   gridApi.setGridOptions({ data: visible.value });
 }
 
-function openForm(record: null | ProcessRecord) {
+function openForm(record: null | ProcessRecord, preset: typeof formPreset.value = null) {
   if (!record && servers.value.length === 0) {
     message.warning('请先在「服务器列表」里添加服务器');
     return;
   }
   editing.value = record;
+  formPreset.value = preset;
   formOpen.value = true;
+}
+
+/** 纳入管理：类型按上报的 type 匹配业务类型编码，服务器按推测的服务器名匹配 */
+function adopt(record: UnmanagedServiceRecord) {
+  const typeId = types.value.find((item) => item.code && item.code === record.type)?.id;
+  const serverId = record.serverName
+    ? servers.value.find((item) => item.name === record.serverName)?.id
+    : undefined;
+  openForm(null, { serverId, typeId });
 }
 
 async function onSaved() {
@@ -308,132 +370,160 @@ onBeforeUnmount(() => {
 
 <template>
   <Page auto-content-height>
-    <Grid table-title="进程管理">
-      <template #toolbar-actions>
-        <span class="ml-3">
-          <Select
-            v-model:value="serverFilter"
-            :options="serverOptions"
-            allow-clear
-            class="w-[180px]"
-            placeholder="全部服务器"
-            size="small"
-            @change="onFilterChange"
-          />
-        </span>
-        <span class="ml-2">
-          <Select
-            v-model:value="typeFilter"
-            :options="typeOptions"
-            allow-clear
-            class="w-[140px]"
-            placeholder="全部类型"
-            size="small"
-            @change="onFilterChange"
-          />
-        </span>
-      </template>
-      <template #toolbar-tools>
-        <Space>
-          <template v-if="canOperate && selected.length > 0">
-            <span class="text-muted-foreground text-sm">已选 {{ selected.length }} 个</span>
-            <Button @click="operateSelected('start')">启动</Button>
-            <Button @click="operateSelected('restart')">重启</Button>
-            <Button danger @click="operateSelected('stop')">停止</Button>
+    <div class="flex h-full flex-col">
+      <Tabs v-model:active-key="tab" class="process-tabs" @change="onTabChange">
+        <TabPane key="managed" tab="托管进程" />
+        <TabPane key="unmanaged">
+          <template #tab>
+            未托管服务
+            <span class="ml-1"><Badge :count="onlineUnmanaged" :number-style="{ backgroundColor: '#1677ff' }" /></span>
           </template>
-          <Button @click="tasksOpen = true">执行记录</Button>
-          <Button @click="typeOpen = true">进程类型</Button>
-          <Button @click="templateOpen = true">JVM 模板</Button>
-          <Button
-            v-if="hasAccessByCodes(['server_process:create'])"
-            type="primary"
-            @click="openForm(null)"
-          >
-            <template #icon>
-              <IconifyIcon class="size-4" icon="lucide:plus" />
+        </TabPane>
+      </Tabs>
+      <div v-show="tab === 'managed'" class="min-h-0 flex-1">
+        <Grid table-title="进程管理">
+          <template #toolbar-actions>
+            <span class="ml-3">
+              <Select
+                v-model:value="serverFilter"
+                :options="serverOptions"
+                allow-clear
+                class="w-[180px]"
+                placeholder="全部服务器"
+                size="small"
+                @change="onFilterChange"
+              />
+            </span>
+            <span class="ml-2">
+              <Select
+                v-model:value="typeFilter"
+                :options="typeOptions"
+                allow-clear
+                class="w-[140px]"
+                placeholder="全部类型"
+                size="small"
+                @change="onFilterChange"
+              />
+            </span>
+          </template>
+          <template #toolbar-tools>
+            <Space>
+              <template v-if="canOperate && selected.length > 0">
+                <span class="text-muted-foreground text-sm">已选 {{ selected.length }} 个</span>
+                <Button @click="operateSelected('start')">启动</Button>
+                <Button @click="operateSelected('restart')">重启</Button>
+                <Button danger @click="operateSelected('stop')">停止</Button>
+              </template>
+              <Button @click="tasksOpen = true">执行记录</Button>
+              <Button @click="typeOpen = true">业务类型</Button>
+              <Button v-if="hasAccessByCodes(['server_process:update'])" @click="reportConfigOpen = true">
+                上报配置
+              </Button>
+              <Button @click="templateOpen = true">JVM 模板</Button>
+              <Button
+                v-if="hasAccessByCodes(['server_process:create'])"
+                type="primary"
+                @click="openForm(null)"
+              >
+                <template #icon>
+                  <IconifyIcon class="size-4" icon="lucide:plus" />
+                </template>
+                新增进程
+              </Button>
+            </Space>
+          </template>
+          <template #server="{ row }">
+            <span>{{ row.serverName }}</span>
+          </template>
+          <template #name="{ row }">
+            <div class="font-medium">{{ row.name }}</div>
+            <div v-if="row.remark || row.templateName" class="text-muted-foreground text-xs">
+              {{ row.remark }}<template v-if="row.remark && row.templateName"> · </template>
+              <template v-if="row.templateName">模板 {{ row.templateName }}</template>
+            </div>
+          </template>
+          <template #state="{ row }">
+            <Tooltip :title="!row.task && row.pendingRestart ? '配置已修改，重启后生效' : undefined">
+              <Tag :color="stateTag(row).color">{{ stateTag(row).text }}</Tag>
+            </Tooltip>
+          </template>
+          <template #service="{ row }">
+            <Tooltip v-if="row.service" :title="serviceTag(row.service, row.typeCode).tip || undefined">
+              <Tag :color="serviceTag(row.service, row.typeCode).color">
+                {{ serviceTag(row.service, row.typeCode).text }}
+              </Tag>
+            </Tooltip>
+            <span v-else>—</span>
+          </template>
+          <template #deployed="{ row }">
+            <template v-if="row.deployedAt">
+              <div>{{ dayjs(row.deployedAt).format('YYYY-MM-DD HH:mm') }}</div>
+              <div v-if="row.deployRemark" class="text-muted-foreground break-all text-xs">
+                {{ row.deployRemark }}
+              </div>
             </template>
-            新增进程
-          </Button>
-        </Space>
-      </template>
-      <template #server="{ row }">
-        <span>{{ row.serverName }}</span>
-      </template>
-      <template #name="{ row }">
-        <div class="font-medium">{{ row.name }}</div>
-        <div v-if="row.remark || row.templateName" class="text-muted-foreground text-xs">
-          {{ row.remark }}<template v-if="row.remark && row.templateName"> · </template>
-          <template v-if="row.templateName">模板 {{ row.templateName }}</template>
-        </div>
-      </template>
-      <template #state="{ row }">
-        <Tooltip :title="!row.task && row.pendingRestart ? '配置已修改，重启后生效' : undefined">
-          <Tag :color="stateTag(row).color">{{ stateTag(row).text }}</Tag>
-        </Tooltip>
-      </template>
-      <template #deployed="{ row }">
-        <template v-if="row.deployedAt">
-          <div>{{ dayjs(row.deployedAt).format('YYYY-MM-DD HH:mm') }}</div>
-          <div v-if="row.deployRemark" class="text-muted-foreground break-all text-xs">
-            {{ row.deployRemark }}
-          </div>
-        </template>
-        <span v-else>—</span>
-      </template>
-      <template #action="{ row }">
-        <template v-if="canOperate">
-          <Button
-            v-if="row.state !== 'active'"
-            :disabled="busy(row)"
-            size="small"
-            type="link"
-            @click="operate([row], 'start')"
-          >
-            启动
-          </Button>
-          <template v-else>
-            <Button :disabled="busy(row)" size="small" type="link" @click="operate([row], 'restart')">
-              重启
+            <span v-else>—</span>
+          </template>
+          <template #action="{ row }">
+            <template v-if="canOperate">
+              <Button
+                v-if="row.state !== 'active'"
+                :disabled="busy(row)"
+                size="small"
+                type="link"
+                @click="operate([row], 'start')"
+              >
+                启动
+              </Button>
+              <template v-else>
+                <Button :disabled="busy(row)" size="small" type="link" @click="operate([row], 'restart')">
+                  重启
+                </Button>
+                <Button :disabled="busy(row)" danger size="small" type="link" @click="operate([row], 'stop')">
+                  停止
+                </Button>
+              </template>
+            </template>
+            <Button
+              v-if="hasAccessByCodes(['server_process:deploy'])"
+              :disabled="busy(row)"
+              size="small"
+              type="link"
+              @click="deploying = row"
+            >
+              部署
             </Button>
-            <Button :disabled="busy(row)" danger size="small" type="link" @click="operate([row], 'stop')">
-              停止
+            <Button size="small" type="link" @click="openMonitor(row)">监控</Button>
+            <Button size="small" type="link" @click="detailId = row.id">详情</Button>
+            <Button
+              v-if="hasAccessByCodes(['server_process:update'])"
+              size="small"
+              type="link"
+              @click="openForm(row)"
+            >
+              编辑
+            </Button>
+            <Button
+              v-if="hasAccessByCodes(['server_process:remove'])"
+              :disabled="row.task !== null"
+              danger
+              size="small"
+              type="link"
+              @click="remove(row)"
+            >
+              删除
             </Button>
           </template>
-        </template>
-        <Button
-          v-if="hasAccessByCodes(['server_process:deploy'])"
-          :disabled="busy(row)"
-          size="small"
-          type="link"
-          @click="deploying = row"
-        >
-          部署
-        </Button>
-        <Button size="small" type="link" @click="openMonitor(row)">监控</Button>
-        <Button size="small" type="link" @click="detailId = row.id">详情</Button>
-        <Button
-          v-if="hasAccessByCodes(['server_process:update'])"
-          size="small"
-          type="link"
-          @click="openForm(row)"
-        >
-          编辑
-        </Button>
-        <Button
-          v-if="hasAccessByCodes(['server_process:remove'])"
-          :disabled="row.task !== null"
-          danger
-          size="small"
-          type="link"
-          @click="remove(row)"
-        >
-          删除
-        </Button>
-      </template>
-    </Grid>
+        </Grid>
+      </div>
+      <div v-if="tab === 'unmanaged'" class="min-h-0 flex-1">
+        <UnmanagedList :list="unmanaged" :types="types" @adopt="adopt" />
+      </div>
+    </div>
 
     <ProcessForm
       :open="formOpen"
+      :preset="formPreset"
       :project-id="projectId"
       :record="editing"
       :servers="servers"
@@ -462,9 +552,16 @@ onBeforeUnmount(() => {
       @close="deploying = null"
       @deployed="onDeployed"
     />
+    <ReportConfigModal :open="reportConfigOpen" :project-id="projectId" @close="reportConfigOpen = false" />
     <ProcessDetail :process="detail" :project-id="projectId" @close="detailId = null" />
     <Drawer :open="tasksOpen" :width="760" destroy-on-close title="执行记录" @close="tasksOpen = false">
       <TaskList :process-id="null" :project-id="projectId" />
     </Drawer>
   </Page>
 </template>
+
+<style scoped>
+.process-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 8px;
+}
+</style>

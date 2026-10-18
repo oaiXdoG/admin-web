@@ -482,7 +482,7 @@ export interface ServerTaskRecord {
 /** 托管进程表单 */
 export interface ProcessWrite {
   remark: string;
-  /** 进程类型，可空 */
+  /** 业务类型，必填（旧数据可能为 null） */
   typeId: null | number;
   workDir: string;
   javaPath: string;
@@ -517,6 +517,47 @@ export interface ProcessRecord extends ProcessWrite {
   pendingRestart: boolean;
   metric: null | ProcessMetric;
   task: null | ServerTaskRecord;
+  /** 业务类型编码，类型没有编码时为空 */
+  typeCode: string;
+  /** 业务服上报的绑定结果；类型没有编码时为 null */
+  service: null | ServiceInfo;
+}
+
+/** 绑定状态：online 30 秒内有上报；not_ready 进程在运行但没有上报；mismatch 上报类型和登记的不一致；offline 进程没在运行 */
+export type ServiceStatus = 'mismatch' | 'not_ready' | 'offline' | 'online';
+
+/** 业务服上报的关键内容（type 为上报的业务类型编码） */
+export interface ServiceReport {
+  type: string;
+  nodeId: string;
+  instanceId: string;
+  /** 区号，只有游戏服（logic）有 */
+  serverId: null | number;
+  host: string;
+  port: number;
+  innerHost: string;
+  /** 0 表示没有 GM 端口 */
+  gmPort: number;
+  /** 毫秒，0 表示从未上报 */
+  reportTime: number;
+  raw: null | Record<string, unknown>;
+}
+
+export interface ServiceInfo extends ServiceReport {
+  status: ServiceStatus;
+}
+
+/** 在上报但不是由后台启动的服务；serverName 为按内网地址匹配的服务器，空为未匹配 */
+export interface UnmanagedServiceRecord extends ServiceReport {
+  online: boolean;
+  serverName: string;
+}
+
+/** 业务服上报配置 */
+export interface ReportConfig {
+  appKey: string;
+  reportUrl: string;
+  secret: string;
 }
 
 export interface JvmTemplateRecord {
@@ -530,6 +571,8 @@ export interface JvmTemplateRecord {
 export interface ProcessTypeRecord {
   id: number;
   name: string;
+  /** 与业务服上报的类型一致，例如 login、callback、logic；空表示不上报 */
+  code: string;
   processCount: number;
 }
 

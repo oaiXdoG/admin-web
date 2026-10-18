@@ -5,9 +5,11 @@ import type {
   ProcessRecord,
   ProcessTypeRecord,
   ProcessWrite,
+  ReportConfig,
   ServerRecord,
   ServerTaskRecord,
   ServerWrite,
+  UnmanagedServiceRecord,
 } from '#/api/types';
 
 import { requestClient } from '#/api/request';
@@ -181,8 +183,10 @@ export async function saveProcessTypeApi(
   projectId: number,
   typeId: null | number,
   name: string,
+  code: string,
 ) {
   return requestClient.post<ProcessTypeRecord>('/server/process-type/save', {
+    code,
     name,
     projectId,
     typeId,
@@ -252,5 +256,24 @@ export async function removeJvmTemplateApi(projectId: number, templateId: number
   return requestClient.post<null>('/server/template/remove', {
     projectId,
     templateId,
+  });
+}
+
+/** 在上报但不是由后台启动的服务 */
+export async function getUnmanagedServicesApi(projectId: number) {
+  return requestClient.post<{ list: UnmanagedServiceRecord[] }>(
+    '/server/node/unmanaged',
+    { projectId },
+  );
+}
+
+export async function getReportConfigApi(projectId: number) {
+  return requestClient.post<ReportConfig>('/server/report-config', { projectId });
+}
+
+/** 重置上报密钥：已运行的托管进程需要重启，手动配置的服务需要改配置 */
+export async function resetReportConfigApi(projectId: number) {
+  return requestClient.post<ReportConfig>('/server/report-config/reset', {
+    projectId,
   });
 }

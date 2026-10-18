@@ -381,7 +381,7 @@ function remove(record: DataSourceRecord) {
         <Alert
           :message="
             sourceType === 'zone'
-              ? '从 ZooKeeper 自动发现本项目的游戏服（/danmu/<App Key>/logic/<区ID>），所有区共用签名密钥和查询模板，只能查在线的区。连接方式：后台和游戏服在同一个内网时选「内网」；不在同一个内网时选「公网」，游戏服的查询端口要对后台服务器的 IP 开放。'
+              ? '区服来自游戏服（业务类型编码 logic）向后台的上报，只列出在线且 GM 端口不为 0 的区；所有区共用签名密钥和查询模板。连接方式：后台和游戏服在同一个内网时选「内网」；不在同一个内网时选「公网」，游戏服的查询端口要对后台服务器的 IP 开放。'
               : '数据源是业务服务器按接口规范提供的查询接口（规范见 admin-background docs/data-center.md）。'
           "
           show-icon

@@ -22,6 +22,12 @@ import {
 import { useVbenForm, z } from '#/adapter/form';
 import { createProcessApi, updateProcessApi } from '#/api';
 
+interface FormValues extends ProcessWrite {
+  launchMode: 'classpath' | 'jar';
+  name: string;
+  serverId: number;
+}
+
 /** 新增或编辑托管进程；record 为 null 时新建 */
 const props = defineProps<{
   open: boolean;
@@ -30,14 +36,10 @@ const props = defineProps<{
   servers: ServerRecord[];
   templates: JvmTemplateRecord[];
   types: ProcessTypeRecord[];
+  /** 新建时的预填值（例如从「未托管服务」纳入管理） */
+  preset?: null | Partial<Pick<FormValues, 'serverId' | 'typeId'>>;
 }>();
 const emit = defineEmits<{ close: []; saved: [] }>();
-
-interface FormValues extends ProcessWrite {
-  launchMode: 'classpath' | 'jar';
-  name: string;
-  serverId: number;
-}
 
 const saving = ref(false);
 const importText = ref('');
@@ -52,6 +54,21 @@ const [ProcessForm, formApi] = useVbenForm({
   },
   schema: [
     {
+      component: 'RadioGroup',
+      componentProps: () => ({
+        buttonStyle: 'solid',
+        optionType: 'button',
+        options: props.types.map((item) => ({
+          label: item.code ? `${item.name}（${item.code}）` : item.name,
+          value: item.id,
+        })),
+      }),
+      fieldName: 'typeId',
+      help: '有编码的业务类型由业务服上报后自动绑定；没有编码的不参与绑定。在工具栏「业务类型」里维护',
+      label: '业务类型',
+      rules: 'selectRequired',
+    },
+    {
       component: 'Input',
       componentProps: () => ({
         disabled: props.record !== null,
@@ -63,16 +80,6 @@ const [ProcessForm, formApi] = useVbenForm({
       rules: z
         .string()
         .regex(/^[a-z][a-z0-9-]{0,47}$/, { message: '小写字母开头，小写字母、数字和 -' }),
-    },
-    {
-      component: 'Select',
-      componentProps: () => ({
-        allowClear: true,
-        options: props.types.map((item) => ({ label: item.name, value: item.id })),
-        placeholder: '不分类',
-      }),
-      fieldName: 'typeId',
-      label: '类型',
     },
     {
       component: 'Input',
@@ -169,6 +176,12 @@ const [ProcessForm, formApi] = useVbenForm({
       componentProps: { autoSize: { maxRows: 6, minRows: 2 }, placeholder: '可空，每行一个 KEY=VALUE，例如 TZ=Asia/Shanghai' },
       fieldName: 'env',
       label: '环境变量',
+      rules: z
+        .string()
+        .optional()
+        .refine((value) => !lines(value).some((line) => line.startsWith('ADM_')), {
+          message: 'ADM_ 开头的变量由后台自动注入',
+        }),
     },
     {
       component: 'Input',
@@ -332,6 +345,8 @@ watch(
         typeId: record.typeId ?? undefined,
         workDir: record.workDir,
       });
+    } else if (props.preset) {
+      await formApi.setValues({ ...props.preset });
     }
     preview.value = commandLine(await formApi.getValues<FormValues>());
   },
@@ -365,6 +380,13 @@ watch(
       </Collapse>
     </div>
     <ProcessForm />
+    <div class="mt-2">
+      <Alert
+        message="后台启动时自动注入实例 ID 和上报配置，业务服上报后自动绑定，不需要填写节点 ID、区号"
+        show-icon
+        type="info"
+      />
+    </div>
     <div class="mt-2">
       <Alert type="info">
         <template #message>

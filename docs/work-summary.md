@@ -200,3 +200,18 @@
 - 本地调试：前端 `pnpm dev`（http://localhost:5173），`/api` 由 vite 代理到 gz 的后端。
 
 ClickHouse `38123` 端口的来源 IP 限制：用户决定不处理。
+
+### 内置角色模板（2026-10-18）
+- admin-background `schema.sql` 末尾写入 5 个角色模板：项目负责人（全部项目菜单）、前端 / 测试 / 运营（日志查询、数据查询，含导出）、后端（服务器管理、数据中心全部）。菜单按 `route_name` 选取，目录下子菜单和按钮一起分配；不是内置角色，可修改删除。说明见 admin-background `docs/initialization.md`。
+- 现有 gz 库的升级脚本 `admin-background/.ops/upgrade-role-template.sql`（与 schema.sql 中的语句相同，可重复执行）已在 gz 执行（2026-10-18），模板 ID 13～17。
+
+### 进程与服务绑定（2026-10-18，已部署 gz，未提交）
+- 方案和改动清单：`docs/service-binding-plan.md`，交互示意 `docs/mockups/service-binding.html`。
+- 服务之间仍走 zfoo 服务发现；登录服、回调服、游戏服都用新包 `admin-background/report-client`（`com.oaixdog:admin-report-client`，`AdminReporter.start(appKey, type, nodeId, url, secret, content)`）每 10 秒向 `/api/node/report` 上报，`type` 为 login / callback / logic，游戏服带区号（serverId）。
+- 绑定：进程类型加编码（`server_process_type.code`），新增进程必须选类型；Agent 0.4.0 为每个进程写 `/etc/admin-agent/env/adm-<进程名>.env`（0600）：`ADM_INSTANCE_ID`=后台进程 ID、`ADM_REPORT_SECRET`=项目上报密钥（`project.report_secret`）、`ADM_REPORT_URL`=Agent baseUrl + `/api/node/report`；服务文件 `EnvironmentFile=-` 引用。业务服读到这些变量即上报，实例 ID = 进程 ID，后台据此绑定。没有变量（手动启动）时可在配置填 `admin.report-url` / `admin.report-secret`，后台显示为「未托管」。
+- 后台：上报按 App Key → instanceId 存内存，30 秒在线；进程列表带 `typeCode`、`service`（online / not_ready / mismatch / offline）；新接口 `/api/server/node/unmanaged`、`/api/server/report-config`、`/reset`；数据中心按区发现只取 type=logic 的上报；上报验签改用项目上报密钥（不再用数据源密钥）。错误码新增 100089（类型编码重复）。
+- 前端：业务类型编码、进程表单先选类型、服务列 / 服务信息 / 最近上报、未托管服务标签、上报配置弹窗、详情「服务」标签。
+- 上线步骤：`report-client` 先 `mvn install` → 后台执行 `.ops/upgrade-service-binding.sql` 并给现有类型补编码 → 发布后台、Agent 0.4.0（gz 重新执行安装命令）→ 发布前端（必须在后台之后，否则未托管列表每 5 秒报错）→ 三个业务服用后台部署并重启。
+- gz 部署（2026-10-18 17:49～17:58）：已执行 `.ops/upgrade-service-binding.sql`，类型 login / logic / callback 补了同名编码，login、daoshinvgui 进程补了类型；后台、Agent 0.4.0（只替换 jar，保留 127.0.0.1 baseUrl）、前端已发布；三个业务服打包后用 rsync 增量同步到 `/usr/local/games/{login,callback,daoshinvgui}`（没走页面部署：包约 70MB，上传太慢），systemctl 重启，并手动把 Agent `/opt/admin-agent/state.properties` 中 3/4/5 的启动版本改为 2（否则显示待重启）。部署前备份 `/root/games-backup-20261018.tgz`。三个服务日志均为「管理后台上报成功」，instanceId 3/4/5 对应进程 ID。
+- 本次发布带上了三个业务服仓库里未提交的 log-sdk 接入改动（`log.dir=logs/event`）。
+- 页面（进程列表服务列、未托管服务、上报配置、数据中心选区）还没有在浏览器里走查。
