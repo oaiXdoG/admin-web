@@ -14,13 +14,11 @@ import { Button, message, Modal, Tag, Tooltip } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getMenuListApi, removeMenuApi } from '#/api';
-import { SCOPE_PLATFORM } from '#/api/types';
 
 import {
   MENU_TYPE_BUTTON,
   MENU_TYPE_DIRECTORY,
   MENU_TYPE_MENU,
-  SCOPE_NAMES,
   useColumns,
   useGridFormSchema,
 } from './data';
@@ -155,11 +153,6 @@ function onRemove(row: MenuRecord) {
           />
           {{ row.name }}
         </span>
-      </template>
-      <template #scope="{ row }">
-        <Tag :color="row.scope === SCOPE_PLATFORM ? 'purple' : 'blue'">
-          {{ SCOPE_NAMES[row.scope] ?? '—' }}
-        </Tag>
       </template>
       <template #status="{ row }">
         <Tag :color="row.status === 1 ? 'success' : 'warning'">

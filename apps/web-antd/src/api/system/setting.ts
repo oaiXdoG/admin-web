@@ -1,8 +1,5 @@
 import type {
   BackupInfo,
-  LogStorage,
-  LogStorageTestResult,
-  LogStorageWrite,
   OperationLogParams,
   OperationLogRow,
   SystemSetting,
@@ -23,41 +20,6 @@ export async function updateSystemSettingApi(data: SystemSetting) {
     loginDescription: data.loginDescription.trim(),
     loginTitle: data.loginTitle.trim(),
   });
-}
-
-export async function getLogStorageApi() {
-  return requestClient.post<LogStorage>('/system/log-storage/get', {});
-}
-
-function trimLogStorage(data: LogStorageWrite) {
-  return {
-    adminPassword: data.adminPassword ?? '',
-    adminUser: data.adminUser.trim(),
-    database: data.database.trim(),
-    url: data.url.trim(),
-  };
-}
-
-export async function updateLogStorageApi(data: LogStorageWrite) {
-  return requestClient.post<LogStorage>(
-    '/system/log-storage/update',
-    trimLogStorage(data),
-  );
-}
-
-/** 用表单里的值测试连接，不保存 */
-export async function testLogStorageApi(data: LogStorageWrite) {
-  return requestClient.post<LogStorageTestResult>(
-    '/system/log-storage/test',
-    trimLogStorage(data),
-  );
-}
-
-export async function updateLogRetentionApi(retentionDays: number) {
-  return requestClient.post<{ retentionDays: number }>(
-    '/system/log-storage/retention',
-    { retentionDays },
-  );
 }
 
 export async function getOperationLogsApi(params: OperationLogParams) {

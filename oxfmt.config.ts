@@ -2,6 +2,7 @@ import { defineConfig } from '@vben/oxfmt-config';
 
 export default defineConfig({
   ignorePatterns: [
+    'backend',
     'dist',
     'dev-dist',
     '.local',

@@ -114,12 +114,11 @@ export function useColumns(): VxeTableGridColumns {
     { align: 'left', field: 'account', minWidth: 140, title: '登录名' },
     { align: 'left', field: 'username', minWidth: 120, title: '显示名' },
     {
-      field: 'platformRoles',
+      field: 'roles',
       minWidth: 160,
-      slots: { default: 'platformRoles' },
-      title: '平台角色',
+      slots: { default: 'roles' },
+      title: '角色',
     },
-    { field: 'projectCount', title: '项目数', width: 80 },
     { align: 'left', field: 'remark', minWidth: 120, title: '备注' },
     {
       field: 'status',

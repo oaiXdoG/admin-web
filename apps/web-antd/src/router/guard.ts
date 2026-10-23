@@ -8,7 +8,7 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
 import { accessRoutes, coreRouteNames, WELCOME_PATH } from '#/router/routes';
-import { useAuthStore, useProjectStore } from '#/store';
+import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
 
@@ -97,17 +97,20 @@ function setupAccessGuard(router: Router) {
       return to;
     }
 
-    // 是否已经生成过动态路由
+    // 是否已经生成过动态路由；默认首页不是实际页面，跳到当前账号的首页
     if (accessStore.isAccessChecked) {
+      const homePath = userStore.userInfo?.homePath;
+      if (to.path === preferences.app.defaultHomePath && homePath) {
+        return { path: homePath, replace: true };
+      }
       return true;
     }
 
-    // 生成路由表：先确定当前项目，菜单权限按项目返回
+    // 生成路由表：菜单权限由后端按角色返回
     let userInfo;
     let access;
     try {
       userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
-      await useProjectStore().load();
       access = await generateAccess({
         roles: userInfo.roles ?? [],
         router,
@@ -131,10 +134,8 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
 
-    // 首页：有项目管理权限进项目管理，否则进第一个可访问的菜单，都没有就显示空白页
-    const homePath = router.hasRoute('manage_project')
-      ? preferences.app.defaultHomePath
-      : (findFirstLeafPath(accessibleMenus) ?? WELCOME_PATH);
+    // 首页：第一个可访问的菜单，没有就显示空白页
+    const homePath = findFirstLeafPath(accessibleMenus) ?? WELCOME_PATH;
     userStore.setUserInfo({ ...userInfo, homePath });
 
     const redirectPath = (from.query.redirect ??

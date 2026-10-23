@@ -1,8 +1,4 @@
-import type {
-  DataParam,
-  DataSourceType,
-  DataTemplateRecord,
-} from '#/api/types';
+import type { DataParam, DataTemplateRecord } from '#/api/types';
 import type { FieldMapping, ValueType } from '#/components/field-mapping/types';
 
 /** 数据查询模板（前端编辑用）：params、fields 已解析 */
@@ -10,10 +6,6 @@ export interface DataTemplate {
   id: number;
   sourceId: number;
   sourceName?: string;
-  /** 数据源类型，模板列表没返回时为 undefined */
-  sourceType?: DataSourceType;
-  /** 数据源的业务类型编码，logic 按区查询，其他 discover 类型按节点查询 */
-  sourceServiceType?: string;
   name: string;
   query: string;
   params: DataParam[];
@@ -39,8 +31,6 @@ export function parseDataTemplate(record: DataTemplateRecord): DataTemplate {
     query: record.query,
     sourceId: record.sourceId,
     sourceName: record.sourceName,
-    sourceServiceType: record.sourceServiceType,
-    sourceType: record.sourceType,
   };
 }
 

@@ -14,14 +14,12 @@ import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
-import { useAuthStore, useProjectStore } from '#/store';
+import { useAuthStore } from '#/store';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 
 /** 登录失效 */
 const CODE_TOKEN_INVALID = 100_003;
-/** 请求的项目与服务器记录的当前项目不一致 */
-const CODE_PROJECT_MISMATCH = 100_027;
 
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
@@ -55,14 +53,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     },
   });
 
-  // 业务错误码处理：登录失效、项目不一致
+  // 业务错误码处理：登录失效
   client.addResponseInterceptor({
     fulfilled: async (response) => {
       const code = response.data?.code;
       if (code === CODE_TOKEN_INVALID) {
         await doReAuthenticate();
-      } else if (code === CODE_PROJECT_MISMATCH) {
-        void useProjectStore().recover();
       }
       return response;
     },

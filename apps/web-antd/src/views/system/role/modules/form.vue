@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { RoleKind } from '#/api';
 import type { RoleRecord, RoleWrite } from '#/api/types';
 
 import { computed, ref } from 'vue';
@@ -9,19 +8,16 @@ import { useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
-import { useRoleApi } from '#/api';
-import { useProjectStore } from '#/store';
+import { roleApi } from '#/api';
 
 import { useFormSchema } from '../data';
 
 interface ModalData {
-  kind: RoleKind;
   role: null | RoleRecord;
 }
 
 const emit = defineEmits<{ success: [] }>();
 
-const projectStore = useProjectStore();
 const data = ref<ModalData | null>(null);
 
 const [Form, formApi] = useVbenForm({
@@ -35,10 +31,6 @@ const [Modal, modalApi] = useVbenModal<ModalData>({
     const { valid } = await formApi.validate();
     if (!valid) return;
     const values = await formApi.getValues<RoleWrite>();
-    const roleApi = useRoleApi(
-      data.value.kind,
-      () => projectStore.currentProjectId,
-    );
     modalApi.lock();
     try {
       if (data.value.role) {
@@ -66,16 +58,7 @@ const [Modal, modalApi] = useVbenModal<ModalData>({
   },
 });
 
-const KIND_NAMES: Record<RoleKind, string> = {
-  platform: '平台角色',
-  project: '项目角色',
-  template: '角色模板',
-};
-
-const title = computed(() => {
-  const name = data.value ? KIND_NAMES[data.value.kind] : '';
-  return data.value?.role ? `编辑${name}` : `新增${name}`;
-});
+const title = computed(() => (data.value?.role ? '编辑角色' : '新增角色'));
 </script>
 
 <template>

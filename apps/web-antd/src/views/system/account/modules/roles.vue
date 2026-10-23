@@ -10,7 +10,7 @@ import { Alert, CheckboxGroup, message, Spin } from 'ant-design-vue';
 import { getAccountRoleOptionsApi, updateAccountRolesApi } from '#/api';
 
 /**
- * 分配平台角色。平台角色只管系统功能，与项目无关；分配「超级管理员」需要操作者本身是超级管理员。
+ * 分配角色，可以多选；分配「超级管理员」需要操作者本身是超级管理员。
  */
 const emit = defineEmits<{ success: [] }>();
 
@@ -25,7 +25,7 @@ const [Modal, modalApi] = useVbenModal<AccountRecord>({
     modalApi.lock();
     try {
       await updateAccountRolesApi(account.value.id, selected.value);
-      message.success('平台角色已保存');
+      message.success('角色已保存');
       emit('success');
       modalApi.close();
     } finally {
@@ -37,7 +37,7 @@ const [Modal, modalApi] = useVbenModal<AccountRecord>({
     const data = modalApi.getData();
     if (!data) return;
     account.value = data;
-    selected.value = data.platformRoles.map((role) => role.id);
+    selected.value = data.roles.map((role) => role.id);
     loading.value = true;
     try {
       roles.value = await getAccountRoleOptionsApi();
@@ -49,10 +49,10 @@ const [Modal, modalApi] = useVbenModal<AccountRecord>({
 </script>
 
 <template>
-  <Modal :title="`分配平台角色 · ${account?.account ?? ''}`" class="w-[480px]">
+  <Modal :title="`分配角色 · ${account?.account ?? ''}`" class="w-[480px]">
     <div class="mb-4">
       <Alert
-        message="平台角色决定能使用哪些系统管理功能；项目里的权限在「关联项目」或项目的成员管理里分配。"
+        message="账号拥有所分配角色的全部菜单；超级管理员拥有全部菜单。"
         show-icon
         type="info"
       />

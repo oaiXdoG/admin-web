@@ -1,6 +1,5 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridColumns } from '#/adapter/vxe-table';
-import type { RoleKind } from '#/api';
 
 import dayjs from 'dayjs';
 
@@ -83,24 +82,13 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-export function useColumns(kind: RoleKind): VxeTableGridColumns {
+export function useColumns(): VxeTableGridColumns {
   return [
     { type: 'checkbox', width: 60 },
     { field: 'id', title: '角色 ID', width: 100 },
     { field: 'name', minWidth: 140, title: '角色名称' },
     { align: 'left', field: 'code', minWidth: 140, title: '角色编码' },
     { align: 'left', field: 'description', minWidth: 180, title: '角色描述' },
-    ...(kind === 'project'
-      ? [
-          {
-            field: 'templateName',
-            formatter: ({ cellValue }: { cellValue?: string }) =>
-              cellValue || '—',
-            title: '来源模板',
-            width: 120,
-          },
-        ]
-      : []),
     {
       field: 'status',
       slots: { default: 'status' },

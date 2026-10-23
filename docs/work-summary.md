@@ -6,12 +6,12 @@
 
 | 仓库 | 路径 | 说明 | 远程 | 最新提交 |
 | --- | --- | --- | --- | --- |
-| admin-front | `/Users/oaixdog/Project/danmu/admin-front` | 管理后台前端，vben-admin 5（Vue 3 + Ant Design Vue），只保留 `apps/web-antd` | GitHub `oaiXdoG/admin-front`，已推送 | `0fc4b3b`（服务器管理；之后只有本文档的更新） |
-| admin-background | `/Users/oaixdog/Project/danmu/admin-background` | 管理后台后端，Java 21 + zfoo 4.1.4 + MyBatis-Plus + PostgreSQL + Redis | GitHub `oaiXdoG/admin-background`，已推送 | `5416935`（服务器管理） |
-| log-sdk | `/Users/oaixdog/Project/danmu/log-sdk` | 日志上报 SDK + ClickHouse / Vector 部署配置 | GitHub `oaiXdoG/log-sdk`，已推送 | 标签 `v0.1.0` |
-| danmu-login | `/Users/oaixdog/Project/danmu/danmu-login` | 弹幕游戏登录服（与玩法无关，一个应用部署一套），zfoo HTTP 9030 + PostgreSQL | GitHub `oaiXdoG/danmu-login` | — |
-| daoshinvgui | `/Users/oaixdog/Project/danmu/daoshinvgui` | 当前开发的游戏服（logic），zfoo TCP 9020 + MongoDB，一个区一个进程 | GitHub `oaiXdoG/daoshinvgui` | — |
-| danmu-callback | 未开发 | 弹幕回调服（整个应用共用） | — | — |
+| admin-web | `/Users/oaixdog/Project/danmu/admin-web` | 管理后台前端，vben-admin 5（Vue 3 + Ant Design Vue），只保留 `apps/web-antd` | GitHub `oaiXdoG/admin-web`，已推送 | `0fc4b3b`（服务器管理；之后只有本文档的更新） |
+| admin-server | `/Users/oaixdog/Project/danmu/admin-web/backend`（admin-web 的 submodule） | 管理后台后端，Java 21 + zfoo 4.1.4 + MyBatis-Plus + PostgreSQL + Redis | GitHub `oaiXdoG/admin-server`，已推送 | `5416935`（服务器管理） |
+| log | `/Users/oaixdog/Project/danmu/log` | 日志上报 SDK + ClickHouse / Vector 部署配置 | GitHub `oaiXdoG/log`，已推送 | 标签 `v0.1.0` |
+| login | `/Users/oaixdog/Project/danmu/login` | 弹幕游戏登录服（与玩法无关，一个应用部署一套），zfoo HTTP 9030 + PostgreSQL | GitHub `oaiXdoG/login` | — |
+| daoshinvgui | `/Users/oaixdog/Project/danmu/apps/daoshinvgui/server` | 当前开发的游戏服（logic），zfoo TCP 9020 + MongoDB，一个区一个进程 | GitHub `oaiXdoG/daoshinvgui` | — |
+| callback | `/Users/oaixdog/Project/danmu/callback` | 弹幕回调服（整个应用共用） | GitHub `oaiXdoG/callback` | — |
 
 约定：直接在 `main` 上开发，不建功能分支；只有用户明确要求时才提交、推送。admin-background 和 log-sdk 遵守各自 `docs/development-guidelines.md`（没有要求时不写测试、不随意编译；接口变化同步改文档）。用户偏好：优先用成熟方案（vben 内置组件、Logback 等），不重复造轮子。
 
@@ -171,7 +171,7 @@
 - 监控详情页（2026-10-15）：历史指标存平台 ClickHouse 库（logs_test）的 `server_metric` 表（每 5 秒一行，保留 7 天，`async_insert`），Redis 只留最新值供列表页。页面 `/server/monitor`（隐藏菜单 `server_monitor`，已执行 `.ops/upgrade-server-monitor.sql`）：实时 / 近 24 小时 / 近 7 天 / 选择日期，粒度 10 秒 / 1 分钟 / 5 分钟 / 1 小时，每指标一行（曲线 + Max/Min/Avg + 放大），导出 CSV。新增指标：主机每秒收发包数、TCP 连接数，进程 TCP 连接数（Agent 0.1.3）。接口 `/api/server/metric/query` 取代原来的两个 trend 接口；原来抽屉里的趋势图和滑块已去掉，进程「详情」抽屉保留状态和执行记录。
 
 ### 弹幕游戏服务架构（2026-10-15～16）
-- 服务注册与发现：ZooKeeper（gz Docker `zookeeper`，只监听 127.0.0.1:2181），规则见 danmu-login `docs/service-discovery.md`。节点 `/danmu/<appKey>/logic/<区ID>`（游戏服）、`/danmu/<appKey>/login/<内网地址:端口>`、`/danmu/<appKey>/callback/<实例ID>`，临时节点每 10 秒刷新。appKey 用管理后台项目的 App Key（当前「测试项目」）。
+- 服务注册与发现：ZooKeeper（gz Docker `zookeeper`，只监听 127.0.0.1:2181），规则见 login `docs/service-discovery.md`。节点 `/danmu/<appKey>/logic/<区ID>`（游戏服）、`/danmu/<appKey>/login/<内网地址:端口>`、`/danmu/<appKey>/callback/<实例ID>`，临时节点每 10 秒刷新。appKey 用管理后台项目的 App Key（当前「测试项目」）。
 - 登录服：账号表 `login_user` 加 `platform`（douyin / local）；按区从 ZooKeeper 取游戏服（当前固定 1 区），不在线或维护中返回「服务器维护中」；票据带 `zoneId`；不再使用 `game_server` 表。
 - 游戏服：一个区一个进程、一个 MongoDB 库（`daoshinvgui_zone<区>`，gz Docker `mongodb`，只监听 127.0.0.1:27017）；zfoo ORM EntityCache（每 30 秒批量写回，停服全部写回）；主播、玩家 ID = 区 ID × 10,000,000 + 区内序号（计数器在 `uuid` 集合）；票据区服不一致拒绝登录。说明见 daoshinvgui `docs/区服与注册.md`。
 - 两个服务的配置都可以用 `-Dkey=value` 覆盖（多区时写在后台进程的 JVM 参数里）；游戏服不再打包 start/stop 脚本。
@@ -206,8 +206,8 @@ ClickHouse `38123` 端口的来源 IP 限制：用户决定不处理。
 - 现有 gz 库的升级脚本 `admin-background/.ops/upgrade-role-template.sql`（与 schema.sql 中的语句相同，可重复执行）已在 gz 执行（2026-10-18），模板 ID 13～17。
 
 ### 进程与服务绑定（2026-10-18，已部署 gz，未提交）
-- 方案和改动清单：`docs/service-binding-plan.md`，交互示意 `docs/mockups/service-binding.html`。
-- 服务之间仍走 zfoo 服务发现；登录服、回调服、游戏服都用新包 `admin-background/report-client`（`com.oaixdog:admin-report-client`，`AdminReporter.start(appKey, type, nodeId, url, secret, content)`）每 10 秒向 `/api/node/report` 上报，`type` 为 login / callback / logic，游戏服带区号（serverId）。
+- 方案文档和交互示意已随功能删除（2026-10-23）。
+- 服务之间仍走 zfoo 服务发现；登录服、回调服、游戏服都用新包 `admin-server/admin-report-client`（`com.oaixdog:admin-report-client`，`AdminReporter.start(appKey, type, nodeId, url, secret, content)`）每 10 秒向 `/api/node/report` 上报，`type` 为 login / callback / logic，游戏服带区号（serverId）。
 - 绑定：进程类型加编码（`server_process_type.code`），新增进程必须选类型；Agent 0.4.0 为每个进程写 `/etc/admin-agent/env/adm-<进程名>.env`（0600）：`ADM_INSTANCE_ID`=后台进程 ID、`ADM_REPORT_SECRET`=项目上报密钥（`project.report_secret`）、`ADM_REPORT_URL`=Agent baseUrl + `/api/node/report`；服务文件 `EnvironmentFile=-` 引用。业务服读到这些变量即上报，实例 ID = 进程 ID，后台据此绑定。没有变量（手动启动）时可在配置填 `admin.report-url` / `admin.report-secret`，后台显示为「未托管」。
 - 后台：上报按 App Key → instanceId 存内存，30 秒在线；进程列表带 `typeCode`、`service`（online / not_ready / mismatch / offline）；新接口 `/api/server/node/unmanaged`、`/api/server/report-config`、`/reset`；数据中心按区发现只取 type=logic 的上报；上报验签改用项目上报密钥（不再用数据源密钥）。错误码新增 100089（类型编码重复）。
 - 前端：业务类型编码、进程表单先选类型、服务列 / 服务信息 / 最近上报、未托管服务标签、上报配置弹窗、详情「服务」标签。
@@ -217,7 +217,38 @@ ClickHouse `38123` 端口的来源 IP 限制：用户决定不处理。
 - 页面（进程列表服务列、未托管服务、上报配置、数据中心选区）还没有在浏览器里走查。
 
 ### 数据源按业务类型发现（2026-10-18，已部署 gz 并在浏览器走通）
-- 约定 `docs/data-source-by-type-plan.md`，示意 `docs/mockups/data-source-by-type.html`。
+- 方案文档和示意已随功能删除（2026-10-23）。
 - `data_source.type`：`http`（固定地址）/ `discover`（按业务类型发现，`service_type` = 业务类型编码）；原 `zone` 取消，gz 已执行 `.ops/upgrade-data-discover.sql`，「游戏服」数据源转为 discover · logic。
 - 目标取该类型在线且 gmPort > 0 的上报：logic 按区（key = 区号），其他按节点（key = nodeId，空则 instanceId）；数据查询 logic 选「区服」，其他选「节点」，都默认第一个。接口 `/data/source/targets` 取代 `/zones`，查询参数 `targets`，结果 `_target`，`/data/source/list` 顶层带 `serviceTypes`（不依赖进程管理权限）。
 - 登录服、回调服 gmPort 为 0，要被查询需先加 GM 查询接口。
+
+### 删除日志中心和平台 ClickHouse（2026-10-23，未提交，未部署）
+- 原因：log 仓库已改为 zfoo 日志服务（自己管理 ClickHouse），日志中心改为由 log 服务主动上报到 admin，旧的「按项目配置日志源、后台直连 ClickHouse」方案作废。
+- admin-server 删除：日志查询 / 导出、事件字典、日志源（`/log/*`），系统设置「日志保留期」（`/system/log-storage/*`、按钮 `manage_setting:storage`），`ClickHouseClient`，表 `log_source`、`log_event`，菜单 50000～50008、10027，错误码 100042、100043、100044、100047、100048、100064；角色模板不再分配日志查询；文档 `log-center.md`、`log-service-design.md` 和 `deploy/clickhouse/` 删除。
+- 服务器监控不再写 ClickHouse，只保留 Redis 最新值；监控详情的历史曲线（`/server/metric/query`）固定返回 100079「监控历史数据暂不可用」。
+- admin-web 删除 `views/log-center`、`api/log`、系统设置的「日志保留期」标签和相关类型。
+- gz 现有数据库还有旧表、菜单和角色授权，需要另写升级脚本清理（`drop table log_source, log_event`，删除菜单 50000～50008、10027 及其 `role_menu`），尚未执行。
+- 顺带修正：schema.sql 页面菜单的插入语句原来以逗号结尾（语法错误），现在以分号结束。
+
+### 改为单项目（2026-10-23，未提交，未部署）
+- 决定：一套部署只服务一个项目（admin、log、login、logic 等各一套），所有服务注册在同一个 ZooKeeper path 下，服务名不加项目前缀，不再用 App Key 区分。
+- 后台删除：`project`、`project_user` 表，`account.last_project_id`，会话当前项目（Redis `login:project:<token>`），项目管理、角色模板、项目设置（成员、项目角色）及接口 `/project/*`、`/role-template/*`、`/account/project/*`，菜单 `scope`，错误码 100004、100005、100024、100025、100027、100029、100032、100040。
+- 角色只有一种：`account_role` 分配，可多个；内置超级管理员（`SUPER_ADMIN`）由代码放行全部菜单，不写 `role_menu`。`PermissionService` 只剩 `requireMenu` / `requireAnyMenu`；`/access/menu` 不带参数。
+- 数据中心、服务器管理的表和接口去掉 `project_id` / `projectId`，名称唯一改为全表唯一。
+- 节点上报不再按 App Key：请求头 `X-Admin-Project` 忽略，上报密钥全局一个，存 `system_setting` 的 `report.secret`；后台调用业务服不再发 `X-Admin-Project`（游戏服 GM 只在带了该头时校验，兼容）。
+- schema.sql：原 5 个角色模板改为初始普通角色 前端 `FRONTEND` / 后端 `BACKEND` / 测试 `TESTER` / 运营 `OPERATOR`（去掉「项目负责人」）。
+- 前端：去掉顶栏项目切换和新建项目弹窗、`store/project.ts`，角色页不再区分三类，用户页只有「分配角色」，个人设置只显示角色；`defaultHomePath` 改为 `/home`（不是实际页面，守卫跳到第一个可访问菜单）。
+- gz：用户决定重新初始化数据库（按新的 schema.sql 重建），尚未执行；业务服的上报密钥要按新的「上报配置」重新配置（托管进程由 Agent 自动注入）。
+- 验证：后端 JDK 21 编译通过，前端 `pnpm typecheck` 和改动文件 eslint 通过；没有本地 PostgreSQL，schema.sql 未实际执行；浏览器未走查（gz 上还是旧后端）。
+
+### 删除 Agent、业务服上报和服务器管理（2026-10-23，未提交，未部署）
+- 决定：机器信息上报、进程部署和控制交给一个新的独立项目；admin-server 不再有 Agent 和 HTTP 上报，以后服务间通信全部走 zfoo RPC。
+- 删除：模块 `admin-agent`、`admin-report-client`；接口 `/agent/*`、`/node/report`、`/server/*`；表 `server_host`、`server_jvm_template`、`server_process_type`、`server_process`、`server_task`；菜单「服务器管理」40000～40012；配置 `agent.base-url`、`server.package-dir`；错误码 100065～100085、100087～100089；前端 `views/server`、`api/server`。初始角色「后端」只剩数据中心。
+- 数据中心只保留固定地址数据源（`data_source` 去掉 `type`、`service_type`、`network`），删除按业务类型发现、`/data/source/targets`、查询的区服 / 节点选择。查询仍是 HTTP + HMAC 调业务服 `/admin/queries`、`/admin/query`，以后改为 zfoo RPC。
+- gz：nginx 去掉 `/agent/`（`deploy/servers/gz/nginx.conf`，未发布）；gz 上已装的 Agent（systemd `admin-agent`）和由它托管的 `adm-login`、`adm-daoshinvgui`、`adm-callback` 服务还在运行，重建时要决定如何接管或卸载。login、callback、游戏服代码里仍引用 `admin-report-client`，本机 Maven 仓库里还有旧 jar，它们的仓库要另行去掉上报。
+- 验证：后端 JDK 21 `clean compile` 通过，前端 `pnpm typecheck` 和改动文件 eslint 通过。
+
+### 下一步：服务向 admin 上报（设计中）
+- 一套部署内所有服务在同一个 ZooKeeper path 下，服务名不加项目前缀。以后不再有 HTTP 上报，服务之间全部走 zfoo RPC（2026-10-23 用户决定）。
+- admin-server 接入 zfoo 注册中心，声明 provider `admin`；logic、login、log 等服务作为 consumer 连接 admin 并上报服务类型，admin 在内存中按类型保存（机器信息由新的独立项目负责）。
+- log 额外上报事件列表和事件的具体信息；admin 订阅 `log`，用 zfoo 原生服务调用（`NetContext.getConsumer().asyncAsk`）调用 log，不自建连接表。

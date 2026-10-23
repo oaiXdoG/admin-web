@@ -1,9 +1,4 @@
-import type {
-  AccountMembership,
-  AccountRecord,
-  ProjectManageItem,
-  RoleRecord,
-} from '#/api/types';
+import type { AccountRecord, RoleRecord } from '#/api/types';
 
 import { requestClient } from '#/api/request';
 
@@ -48,7 +43,7 @@ export async function updateAccountStatusApi(
   return requestClient.post<null>('/account/status', { accountId, status });
 }
 
-/** 可分配给账号的平台角色 */
+/** 可分配给账号的角色 */
 export async function getAccountRoleOptionsApi() {
   return requestClient.post<RoleRecord[]>('/account/role/options', {});
 }
@@ -60,36 +55,5 @@ export async function updateAccountRolesApi(
   return requestClient.post<null>('/account/role/update', {
     accountId,
     roleIds,
-  });
-}
-
-export async function getAccountProjectsApi(accountId: number) {
-  return requestClient.post<AccountMembership[]>('/account/project/list', {
-    accountId,
-  });
-}
-
-/** 关联项目时可选的项目：全部未关闭项目 */
-export async function getAccountProjectOptionsApi() {
-  return requestClient.post<ProjectManageItem[]>(
-    '/account/project/options',
-    {},
-  );
-}
-
-/** 指定项目里可选的项目角色 */
-export async function getAccountProjectRolesApi(projectId: number) {
-  return requestClient.post<RoleRecord[]>('/account/project/roles', {
-    projectId,
-  });
-}
-
-export async function updateAccountProjectsApi(
-  accountId: number,
-  memberships: AccountMembership[],
-) {
-  return requestClient.post<null>('/account/project/update', {
-    accountId,
-    memberships,
   });
 }

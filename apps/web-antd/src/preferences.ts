@@ -7,9 +7,10 @@ import { defineOverridesPreferences } from '@vben/preferences';
  */
 export const overridesPreferences = defineOverridesPreferences({
   app: {
-    // 菜单由后端按项目和角色返回
+    // 菜单由后端按角色返回
     accessMode: 'backend',
-    defaultHomePath: '/manage/project',
+    // 不是实际页面：路由守卫把它跳到当前账号第一个可访问的菜单
+    defaultHomePath: '/home',
     enableCheckUpdates: false,
     enableRefreshToken: false,
     locale: 'zh-CN',

@@ -17,7 +17,6 @@ import { STATUS_DISABLED, STATUS_ENABLED } from '#/api/types';
 
 import { useColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
-import Projects from './modules/projects.vue';
 import Roles from './modules/roles.vue';
 
 const userStore = useUserStore();
@@ -25,9 +24,6 @@ const { hasAccessByCodes } = useAccess();
 const statusChanging = ref<null | number>(null);
 
 const [FormModal, formModalApi] = useVbenModal({ connectedComponent: Form });
-const [ProjectsModal, projectsModalApi] = useVbenModal({
-  connectedComponent: Projects,
-});
 const [RolesModal, rolesModalApi] = useVbenModal({ connectedComponent: Roles });
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -105,7 +101,6 @@ function onStatusChange(row: AccountRecord, checked: boolean) {
 <template>
   <Page auto-content-height>
     <FormModal @success="onRefresh" />
-    <ProjectsModal @success="onRefresh" />
     <RolesModal @success="onRefresh" />
     <Grid table-title="用户列表">
       <template #toolbar-tools>
@@ -118,14 +113,11 @@ function onStatusChange(row: AccountRecord, checked: boolean) {
           新增
         </Button>
       </template>
-      <template #platformRoles="{ row }">
-        <Tag v-for="role in row.platformRoles" :key="role.id" color="purple">
+      <template #roles="{ row }">
+        <Tag v-for="role in row.roles" :key="role.id" color="purple">
           {{ role.name }}
         </Tag>
-        <span
-          v-if="row.platformRoles.length === 0"
-          class="text-muted-foreground"
-        >
+        <span v-if="row.roles.length === 0" class="text-muted-foreground">
           —
         </span>
       </template>
@@ -154,15 +146,7 @@ function onStatusChange(row: AccountRecord, checked: boolean) {
           type="link"
           @click="rolesModalApi.setData(row).open()"
         >
-          平台角色
-        </Button>
-        <Button
-          v-if="hasAccessByCodes(['manage_user:project'])"
-          size="small"
-          type="link"
-          @click="projectsModalApi.setData(row).open()"
-        >
-          关联项目
+          分配角色
         </Button>
       </template>
     </Grid>

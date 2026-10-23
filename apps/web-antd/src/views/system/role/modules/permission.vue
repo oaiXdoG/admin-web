@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { RoleKind } from '#/api';
 import type { MenuRecord, RoleRecord } from '#/api/types';
 
 import { computed, ref } from 'vue';
@@ -8,11 +7,9 @@ import { useVbenModal } from '@vben/common-ui';
 
 import { message, Spin, Tree } from 'ant-design-vue';
 
-import { useRoleApi } from '#/api';
-import { useProjectStore } from '#/store';
+import { roleApi } from '#/api';
 
 interface ModalData {
-  kind: RoleKind;
   role: RoleRecord;
 }
 
@@ -23,9 +20,7 @@ interface TreeNode {
   title: string;
 }
 
-const projectStore = useProjectStore();
 const role = ref<null | RoleRecord>(null);
-let roleApi = useRoleApi('platform');
 const menus = ref<MenuRecord[]>([]);
 const checkedKeys = ref<number[]>([]);
 /** 打开时已分配的菜单，用来判断停用菜单是否允许取消 */
@@ -85,7 +80,10 @@ function withAncestors(menuIds: number[]) {
  * 父子各自独立勾选（菜单页面可以只分配查看、不分配按钮），联动规则自己处理：
  * 勾选时带上所有上级和全部下级，取消时一起取消全部下级
  */
-function onCheck(_keys: unknown, info: { checked: boolean; node: { key: number | string } }) {
+function onCheck(
+  _keys: unknown,
+  info: { checked: boolean; node: { key: number | string } },
+) {
   const id = Number(info.node.key);
   const related = [id, ...descendantIds(id)];
   checkedKeys.value = info.checked
@@ -113,7 +111,6 @@ const [Modal, modalApi] = useVbenModal<ModalData>({
     const modalData = modalApi.getData();
     if (!modalData) return;
     const current = modalData.role;
-    roleApi = useRoleApi(modalData.kind, () => projectStore.currentProjectId);
     role.value = current;
     menus.value = [];
     checkedKeys.value = [];

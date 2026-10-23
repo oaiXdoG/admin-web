@@ -80,6 +80,7 @@
     "yxxx"
   ],
   "ignorePaths": [
+    "backend/**",
     "**/*-dist/**",
     "**/*.log",
     "**/*.spec.ts",

@@ -10,7 +10,6 @@ import {
   Card,
   Descriptions,
   DescriptionsItem,
-  Empty,
   message,
   TabPane,
   Tabs,
@@ -198,35 +197,14 @@ onMounted(async () => fill(await getProfileApi()));
             <DescriptionsItem label="登录名">
               {{ profile.account }}
             </DescriptionsItem>
-            <DescriptionsItem label="平台角色">
-              <Tag
-                v-for="role in profile.platformRoles"
-                :key="role"
-                color="purple"
-              >
+            <DescriptionsItem label="角色">
+              <Tag v-for="role in profile.roles" :key="role" color="purple">
                 {{ role }}
               </Tag>
-              <span v-if="profile.platformRoles.length === 0">—</span>
-            </DescriptionsItem>
-            <DescriptionsItem label="所在项目">
-              <div v-if="profile.superAdmin" class="mb-2 text-sm">
-                超级管理员可以进入全部项目，并拥有项目里的全部权限。
+              <span v-if="profile.roles.length === 0">—</span>
+              <div v-if="profile.superAdmin" class="mt-2 text-sm">
+                超级管理员拥有全部菜单和按钮。
               </div>
-              <div
-                v-for="item in profile.projects"
-                :key="item.projectId"
-                class="mb-1"
-              >
-                {{ item.projectName }}
-                <span class="ml-2">
-                  <Tag color="blue">{{ item.roleName }}</Tag>
-                </span>
-              </div>
-              <Empty
-                v-if="!profile.superAdmin && profile.projects.length === 0"
-                :image="Empty.PRESENTED_IMAGE_SIMPLE"
-                description="还没有加入任何项目"
-              />
             </DescriptionsItem>
             <DescriptionsItem label="最后登录">
               {{ formatTime(profile.lastLoginAt) }}

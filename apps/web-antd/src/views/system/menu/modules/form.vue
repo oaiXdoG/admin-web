@@ -29,7 +29,6 @@ interface FormValues {
   icon?: string;
   menuType: number;
   parentId: number;
-  scope: number;
   name: string;
   routeName?: string;
   routePath?: string;
@@ -93,7 +92,6 @@ function toWrite(values: FormValues, parentId?: number): MenuWrite {
     };
   }
   return {
-    scope: values.scope,
     hidden: values.hidden ?? false,
     icon: values.icon?.trim() ?? '',
     menuType: values.menuType,
@@ -157,7 +155,6 @@ const [Modal, modalApi] = useVbenModal<MenuEditor>({
       );
       formApi.setValues({
         parentId: record.parentId || 0,
-        scope: record.scope,
         registeredRoute: registered ? record.routeName : undefined,
         authCode:
           record.menuType === MENU_TYPE_BUTTON ? record.routeName : undefined,

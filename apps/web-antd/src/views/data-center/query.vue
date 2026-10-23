@@ -5,11 +5,7 @@ import type { DataTemplate } from './types';
 
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type {
-  DataParam,
-  DataQueryResult,
-  DataSourceTarget,
-} from '#/api/types';
+import type { DataParam } from '#/api/types';
 
 import { computed, onMounted, ref } from 'vue';
 
@@ -18,7 +14,6 @@ import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
 import {
-  Alert,
   Button,
   Drawer,
   Empty,
@@ -31,25 +26,17 @@ import dayjs from 'dayjs';
 
 import { useVbenForm } from '#/adapter/form';
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import {
-  exportDataApi,
-  getDataTemplatesApi,
-  getSourceTargetsApi,
-  queryDataApi,
-} from '#/api';
+import { exportDataApi, getDataTemplatesApi, queryDataApi } from '#/api';
 import {
   downloadCsv,
   flattenFields,
   mappedColumns,
   readDotPath,
 } from '#/components/field-mapping/types';
-import { useProjectStore } from '#/store';
 
 import { parseDataTemplate } from './types';
 
-const projectStore = useProjectStore();
 const { hasAccessByCodes } = useAccess();
-const projectId = computed(() => projectStore.currentProjectId as number);
 
 const templates = ref<DataTemplate[]>([]);
 const templateId = ref<number>();
@@ -59,46 +46,9 @@ const detail = ref<null | Record<string, unknown>>(null);
 const exporting = ref(false);
 let rawRows: Record<string, unknown>[] = [];
 
-/** 模板的数据源是否按业务类型发现；是的话要选区服（logic）或节点（其他类型） */
-const targetMode = ref(false);
-const targets = ref<DataSourceTarget[]>([]);
-const targetsLoading = ref(false);
-/** 选中的目标 key */
-const targetKeys = ref<string[]>([]);
-/** 点击查询时固定下来的目标，翻页、导出时沿用 */
-const submittedTargets = ref<string[]>([]);
-/** 查询失败或已离线的目标，不影响其他目标的结果 */
-const failures = ref<DataQueryResult['failures']>([]);
-/** 切换模板时丢弃上一个模板晚到的目标列表 */
-let targetsToken = 0;
-
-/** 结果里的区服 / 节点列，避开模板字段名 */
-const TARGET_COLUMN = '__target';
-
 const template = computed(() =>
   templates.value.find((item) => item.id === templateId.value),
 );
-/** 游戏服（logic）按区，其他业务类型按节点；模板列表没带业务类型时看目标有没有区号 */
-const zoneMode = computed(() => {
-  const serviceType = template.value?.sourceServiceType;
-  return serviceType
-    ? serviceType === 'logic'
-    : targets.value.some((target) => target.zoneId !== null);
-});
-const targetName = computed(() => (zoneMode.value ? '区服' : '节点'));
-const targetOptions = computed(() =>
-  targets.value.map((target) => ({
-    label: targetLabel(target.key),
-    value: target.key,
-  })),
-);
-
-/** 目标 key 转为显示文字：logic 为「N 区」，其他为 nodeId */
-function targetLabel(key: string) {
-  const target = targets.value.find((item) => item.key === key);
-  if (zoneMode.value) return `${target?.zoneId ?? key} 区`;
-  return target?.nodeId || key;
-}
 const templateOptions = computed(() =>
   templates.value.map((item) => ({
     label: `${item.name}（${item.sourceName ?? ''}）`,
@@ -183,15 +133,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
           const current = template.value;
           if (!current || !submitted.value) return { items: [], total: 0 };
           const result = await queryDataApi(
-            projectId.value,
             current.id,
             submitted.value,
             page.currentPage,
             page.pageSize,
-            submittedTargets.value,
           );
           rawRows = result.list;
-          failures.value = result.failures ?? [];
           return {
             items: result.list.map((row) => toTableRow(row)),
             total: result.total,
@@ -205,82 +152,26 @@ const [Grid, gridApi] = useVbenVxeGrid({
 });
 
 function toTableRow(row: Record<string, unknown>) {
-  const result = flattenFields(template.value?.fields ?? [], (field) =>
+  return flattenFields(template.value?.fields ?? [], (field) =>
     readDotPath(row, field.source),
   );
-  if (targetMode.value) {
-    result[TARGET_COLUMN] =
-      row._target === undefined || row._target === null
-        ? ''
-        : targetLabel(String(row._target));
-  }
-  return result;
 }
 
 /** 切换模板：重建参数表单和结果列，清空结果 */
 /** 结果列加上固定在右侧的「详情」，只有点它才打开详情，点表格其他地方可以正常选中、复制文字 */
 function resultColumns(fields: Parameters<typeof mappedColumns>[0]) {
-  const targetColumns = targetMode.value
-    ? [
-        {
-          field: TARGET_COLUMN,
-          fixed: 'left' as const,
-          title: targetName.value,
-          width: zoneMode.value ? 90 : 140,
-        },
-      ]
-    : [];
   return [
-    ...targetColumns,
     ...mappedColumns(fields),
     { field: 'operation', fixed: 'right' as const, slots: { default: 'detail' }, title: '操作', width: 72 },
   ];
 }
 
-/**
- * 读取模板数据源的可查询目标：discover 类型默认选第一个；http 类型返回空列表。
- * 模板列表没带数据源类型时，有目标即按目标查询
- */
-async function loadTargets(sourceId: number, sourceType?: string) {
-  const token = ++targetsToken;
-  targets.value = [];
-  targetKeys.value = [];
-  targetMode.value = sourceType === 'discover';
-  if (sourceType === 'http') return;
-  targetsLoading.value = true;
-  try {
-    const { list } = await getSourceTargetsApi(projectId.value, sourceId);
-    if (token !== targetsToken) return;
-    targets.value = list;
-    targetMode.value = sourceType === 'discover' || list.length > 0;
-    targetKeys.value = list[0] ? [list[0].key] : [];
-  } catch {
-    // 错误信息已由请求拦截器提示
-  } finally {
-    if (token === targetsToken) targetsLoading.value = false;
-  }
-}
-
-function selectAllTargets() {
-  targetKeys.value = targets.value.map((target) => target.key);
-}
-
 async function onTemplateChange() {
   submitted.value = undefined;
-  submittedTargets.value = [];
-  failures.value = [];
   rawRows = [];
   const current = template.value;
   formApi.setState({ schema: (current?.params ?? []).map(paramSchema) });
   await formApi.reset();
-  if (current) {
-    await loadTargets(current.sourceId, current.sourceType);
-  } else {
-    targetsToken++;
-    targetMode.value = false;
-    targets.value = [];
-    targetKeys.value = [];
-  }
   // 切换期间又选了别的模板，交给后一次处理
   if (template.value !== current) return;
   gridApi.setGridOptions({
@@ -309,14 +200,9 @@ async function search() {
     message.warning('请选择查询模板');
     return;
   }
-  if (targetMode.value && targetKeys.value.length === 0) {
-    message.warning(`请选择${targetName.value}`);
-    return;
-  }
   const params = await paramValues();
   if (!params) return;
   submitted.value = params;
-  submittedTargets.value = targetMode.value ? [...targetKeys.value] : [];
   await gridApi.query();
 }
 
@@ -325,12 +211,7 @@ async function exportCsv() {
   if (!current || !submitted.value) return;
   exporting.value = true;
   try {
-    const result = await exportDataApi(
-      projectId.value,
-      current.id,
-      submitted.value,
-      submittedTargets.value,
-    );
+    const result = await exportDataApi(current.id, submitted.value);
     const columns = resultColumns(current.fields)
       .filter((column) => column.field !== 'operation')
       .map((column) => ({
@@ -347,13 +228,6 @@ async function exportCsv() {
         ? '已导出前 5 万行'
         : `已导出 ${result.list.length} 行`,
     );
-    const failed = result.failures ?? [];
-    if (failed.length > 0) {
-      const unit = zoneMode.value ? '区' : '节点';
-      message.warning(
-        `以下${unit}导出失败：${failed.map((item) => `${targetLabel(item.target)}：${item.message}`).join('；')}`,
-      );
-    }
   } catch {
     // 错误信息已由请求拦截器提示
   } finally {
@@ -362,7 +236,7 @@ async function exportCsv() {
 }
 
 onMounted(async () => {
-  const { list } = await getDataTemplatesApi(projectId.value);
+  const { list } = await getDataTemplatesApi();
   templates.value = list.map(parseDataTemplate);
 });
 </script>
@@ -371,10 +245,7 @@ onMounted(async () => {
   <Page auto-content-height>
     <div class="dc-page">
       <section class="dc-panel">
-        <div
-          :class="{ 'dc-template--hint': targetMode && targetKeys.length > 1 }"
-          class="dc-template"
-        >
+        <div class="dc-template">
           <span class="dc-label">查询模板</span>
           <Select
             v-model:value="templateId"
@@ -385,39 +256,6 @@ onMounted(async () => {
             option-filter-prop="label"
             @change="onTemplateChange"
           />
-          <div v-if="targetMode" class="dc-zone">
-            <span class="dc-zone-label">{{ targetName }}</span>
-            <Select
-              v-model:value="targetKeys"
-              :loading="targetsLoading"
-              max-tag-count="responsive"
-              :not-found-content="
-                targetsLoading
-                  ? '加载中'
-                  : zoneMode
-                    ? '没有在线的区'
-                    : '没有可查询的节点'
-              "
-              :options="targetOptions"
-              :placeholder="`请选择${targetName}`"
-              class="dc-zone-select"
-              mode="multiple"
-              option-filter-prop="label"
-            />
-            <Button
-              :disabled="targets.length === 0"
-              size="small"
-              type="link"
-              @click="selectAllTargets"
-            >
-              全部
-            </Button>
-            <div v-if="targetKeys.length > 1" class="dc-zone-hint">
-              多个{{ zoneMode ? '区' : '节点' }}时每个{{
-                zoneMode ? '区' : '节点'
-              }}各取当前页，合并显示
-            </div>
-          </div>
           <Tag v-if="template" color="blue">{{ template.query }}</Tag>
         </div>
         <template v-if="template">
@@ -437,20 +275,6 @@ onMounted(async () => {
           </div>
         </template>
       </section>
-      <div v-if="failures.length > 0">
-        <Alert show-icon type="warning">
-          <template #message>
-            {{ failures.length }} 个{{ zoneMode ? '区' : '节点' }}查询失败，结果中不包含这些{{
-              zoneMode ? '区' : '节点'
-            }}
-          </template>
-          <template #description>
-            <div v-for="item in failures" :key="item.target">
-              {{ targetLabel(item.target) }}：{{ item.message }}
-            </div>
-          </template>
-        </Alert>
-      </div>
       <div class="dc-result">
         <Grid table-title="查询结果">
           <template #toolbar-tools>
@@ -510,39 +334,6 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-}
-
-.dc-template--hint {
-  padding-bottom: 20px;
-}
-
-.dc-zone {
-  position: relative;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  max-width: 100%;
-}
-
-.dc-zone-label {
-  flex-shrink: 0;
-  margin-left: 12px;
-  font-size: 14px;
-}
-
-.dc-zone-select {
-  width: 280px;
-  max-width: 100%;
-}
-
-/* 放在区服下拉框下面，不撑高这一行 */
-.dc-zone-hint {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 52px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground));
-  white-space: nowrap;
 }
 
 .dc-label {

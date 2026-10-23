@@ -38,7 +38,6 @@ import {
   updateDataTemplateApi,
 } from '#/api';
 import FieldMappingEditor from '#/components/field-mapping/field-mapping-editor.vue';
-import { useProjectStore } from '#/store';
 
 import ParamEditor from './components/param-editor.vue';
 import { DATA_PATH_PATTERN, parseDataTemplate, toValueType } from './types';
@@ -51,9 +50,7 @@ interface EditorState {
   sourceId?: number;
 }
 
-const projectStore = useProjectStore();
 const { hasAccessByCodes } = useAccess();
-const projectId = computed(() => projectStore.currentProjectId as number);
 
 const sources = ref<DataSourceRecord[]>([]);
 const queries = ref<BusinessQuery[]>([]);
@@ -119,7 +116,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
-          const { list } = await getDataTemplatesApi(projectId.value);
+          const { list } = await getDataTemplatesApi();
           const rows = list.map(parseDataTemplate);
           return { items: rows, total: rows.length };
         },
@@ -149,7 +146,7 @@ async function loadQueries(notify = true) {
   loadingQueries.value = true;
   try {
     queries.value = (
-      await getSourceQueriesApi(projectId.value, state.value.sourceId)
+      await getSourceQueriesApi(state.value.sourceId)
     ).queries;
     if (notify) message.success(`读取到 ${queries.value.length} 个查询`);
   } catch {
@@ -241,8 +238,8 @@ async function submit() {
   saving.value = true;
   try {
     await (editing.value === 'new'
-      ? createDataTemplateApi(projectId.value, data)
-      : updateDataTemplateApi(projectId.value, editing.value.id, data));
+      ? createDataTemplateApi(data)
+      : updateDataTemplateApi(editing.value.id, data));
     message.success('查询模板已保存');
     editing.value = null;
     await gridApi.query();
@@ -261,7 +258,7 @@ function remove(row: DataTemplate) {
     okText: '删除',
     title: '删除查询模板',
     async onOk() {
-      await removeDataTemplateApi(projectId.value, row.id);
+      await removeDataTemplateApi(row.id);
       message.success('查询模板已删除');
       await gridApi.query();
     },
@@ -269,17 +266,13 @@ function remove(row: DataTemplate) {
 }
 
 onMounted(async () => {
-  sources.value = (await getDataSourcesApi(projectId.value)).list;
+  sources.value = (await getDataSourcesApi()).list;
 });
 </script>
 
 <template>
   <Page auto-content-height>
-    <Grid
-      v-if="projectStore.currentProjectId !== null"
-      :key="projectStore.currentProjectId"
-      table-title="数据查询模板"
-    >
+    <Grid table-title="数据查询模板">
       <template #toolbar-tools>
         <Button
           v-if="hasAccessByCodes(['data_template:create'])"

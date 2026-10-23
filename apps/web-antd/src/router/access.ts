@@ -13,7 +13,6 @@ import { useAccessStore } from '@vben/stores';
 import { getAccessMenusApi } from '#/api';
 import { MENU_BUTTON } from '#/api/types';
 import { BasicLayout, IFrameView } from '#/layouts';
-import { useProjectStore } from '#/store';
 
 import { findRegisteredRoute } from './registry';
 
@@ -95,9 +94,7 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
   return await generateAccessible(preferences.app.accessMode, {
     ...options,
     fetchMenuListAsync: async () => {
-      const projectStore = useProjectStore();
-      const menus =
-        (await getAccessMenusApi(projectStore.currentProjectId)) ?? [];
+      const menus = (await getAccessMenusApi()) ?? [];
       // 按钮不生成路由，权限标识交给 vben 的权限码，页面用 useAccess().hasAccessByCodes 判断
       useAccessStore().setAccessCodes(
         menus
