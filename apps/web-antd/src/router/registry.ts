@@ -43,6 +43,19 @@ export const registeredRoutes: RegisteredRoute[] = [
     title: '操作日志',
     component: '/system/operation-log/index',
   },
+  { name: 'log', path: '/log', title: '日志中心', directory: true },
+  {
+    name: 'log_query',
+    path: '/log/query',
+    title: '日志查询',
+    component: '/log-center/query',
+  },
+  {
+    name: 'log_event',
+    path: '/log/event',
+    title: '日志事件',
+    component: '/log-center/event',
+  },
   { name: 'data', path: '/data', title: '数据中心', directory: true },
   {
     name: 'data_query',

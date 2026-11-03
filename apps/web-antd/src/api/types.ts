@@ -205,3 +205,51 @@ export interface DataQueryResult {
   total: number;
   list: Record<string, unknown>[];
 }
+
+/** 日志服务里的字段类型 */
+export type LogDefinitionFieldType =
+  | 'bool'
+  | 'date'
+  | 'decimal'
+  | 'double'
+  | 'int'
+  | 'long'
+  | 'string';
+
+/** 事件定义中的字段：key 是上报字段名，field 是存储字段名，name 是显示名称（可为空），display 决定是否作为查询结果列 */
+export interface LogDefinitionField {
+  key: string;
+  field: string;
+  type: LogDefinitionFieldType;
+  required: boolean;
+  name: string;
+  display: boolean;
+}
+
+/** 日志服务里的事件定义：一个事件对应一个 Mongo 集合，name 是显示名称（可为空） */
+export interface LogDefinition {
+  event: string;
+  name: string;
+  collection: string;
+  fields: LogDefinitionField[];
+}
+
+export type LogOperator = 'eq' | 'ge' | 'gt' | 'le' | 'like' | 'lt' | 'ne';
+
+/** 查询条件：value 为文本，date 字段为毫秒 */
+export interface LogCondition {
+  key: string;
+  op: LogOperator;
+  value: string;
+}
+
+export interface LogQueryParams {
+  event: string;
+  conditions: LogCondition[];
+}
+
+/** 结果行以上报字段名为 key */
+export interface LogQueryResult {
+  total: number;
+  list: Record<string, unknown>[];
+}
