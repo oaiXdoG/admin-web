@@ -253,3 +253,128 @@ export interface LogQueryResult {
   total: number;
   list: Record<string, unknown>[];
 }
+
+/** 运维中心：host 读取的机器信息，字节、秒、0～1 的使用率 */
+export interface OpsHostInfo {
+  hostname: string;
+  os: string;
+  cpuCores: number;
+  cpuUsage: number;
+  memoryTotal: number;
+  memoryUsed: number;
+  disks: { mount: string; total: number; used: number }[];
+  uptime: number;
+  /** 字节/秒 */
+  netIn: number;
+  netOut: number;
+}
+
+/** 主机手动添加，管理后台用 Ansible 通过 SSH 管理；连不上时 info 为空，error 为原因 */
+export interface OpsHostRecord {
+  id: number;
+  ip: string;
+  sshPort: number;
+  hostname: string;
+  remark: string;
+  /** SSH 能连上 */
+  online: boolean;
+  /** 初始化（装 JDK、unzip）完成时间，0 表示未初始化 */
+  initializedAt: number;
+  lastSeenAt: number;
+  createdAt: number;
+  appCount: number;
+  runningCount: number;
+  error: string;
+  info?: OpsHostInfo;
+}
+
+export interface OpsHostWrite {
+  ip: string;
+  sshPort: number;
+  remark?: string;
+}
+
+export interface OpsHostOption {
+  id: number;
+  ip: string;
+  hostname: string;
+  remark: string;
+  online: boolean;
+}
+
+export interface OpsAppState {
+  dir: string;
+  error: string;
+  deployed: boolean;
+  running: boolean;
+  /** 进程不是 systemd 启动的，下次启动或发布时会被接管 */
+  unmanaged: boolean;
+  /** systemd ActiveState：active、inactive、failed、activating、deactivating、not-found 等 */
+  status: string;
+  /** systemd 自动拉起的次数 */
+  restarts: number;
+  pid: number;
+  startTime: number;
+  memory: number;
+  cpuUsage: number;
+}
+
+/** 主机不在线或读取失败时 state 为空，error 为原因 */
+export interface OpsAppRecord {
+  id: number;
+  name: string;
+  hostId: number;
+  hostIp: string;
+  hostname: string;
+  hostOnline: boolean;
+  dir: string;
+  remark: string;
+  deployedAt: number;
+  createdAt: number;
+  updatedAt: number;
+  error: string;
+  /** 有任务正在执行 */
+  busy: boolean;
+  state?: OpsAppState;
+}
+
+export interface OpsAppWrite {
+  name: string;
+  hostId: number;
+  dir: string;
+  remark?: string;
+}
+
+export type OpsAppAction = 'restart' | 'start' | 'stop';
+
+export type OpsAppLogFile = 'error.log' | 'server.log';
+
+export type OpsTaskStatus = 'failed' | 'running' | 'success';
+
+/** 运维任务：初始化、启停、发布、回滚、保存配置在后台执行，按 taskId 轮询输出 */
+export interface OpsTaskRecord {
+  id: number;
+  /** init、start、stop、restart、deploy、rollback、config 等 */
+  type: string;
+  title: string;
+  hostId: number;
+  appId: number;
+  account: string;
+  status: OpsTaskStatus;
+  startedAt: number;
+  finishedAt: number;
+}
+
+export interface OpsTaskDetail extends OpsTaskRecord {
+  /** 请求的 offset 之后的输出 */
+  output: string;
+  /** 下次轮询传这个 offset */
+  offset: number;
+}
+
+export interface OpsAppOption {
+  id: number;
+  name: string;
+  dir: string;
+  remark: string;
+}

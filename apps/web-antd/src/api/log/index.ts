@@ -1,4 +1,8 @@
-import type { LogDefinition, LogQueryParams, LogQueryResult } from '#/api/types';
+import type {
+  LogDefinition,
+  LogQueryParams,
+  LogQueryResult,
+} from '#/api/types';
 
 import { requestClient } from '#/api/request';
 

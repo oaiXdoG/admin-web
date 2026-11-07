@@ -75,6 +75,31 @@ export const registeredRoutes: RegisteredRoute[] = [
     title: '数据源',
     component: '/data-center/source',
   },
+  { name: 'ops', path: '/ops', title: '运维中心', directory: true },
+  {
+    name: 'ops_host',
+    path: '/ops/host',
+    title: '主机管理',
+    component: '/ops-center/host',
+  },
+  {
+    name: 'ops_app',
+    path: '/ops/app',
+    title: '程序管理',
+    component: '/ops-center/app',
+  },
+  {
+    name: 'ops_monitor',
+    path: '/ops/monitor',
+    title: '主机监控',
+    component: '/ops-center/monitor',
+  },
+  {
+    name: 'ops_task',
+    path: '/ops/task',
+    title: '运维任务',
+    component: '/ops-center/task',
+  },
 ];
 
 export function findRegisteredRoute(name: string, path?: string) {
