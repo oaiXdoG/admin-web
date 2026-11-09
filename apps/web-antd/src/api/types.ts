@@ -351,7 +351,7 @@ export type OpsAppLogFile = 'error.log' | 'server.log';
 
 export type OpsTaskStatus = 'failed' | 'running' | 'success';
 
-/** 运维任务：初始化、启停、发布、回滚、保存配置在后台执行，按 taskId 轮询输出 */
+/** 一次后台执行的 Ansible：发起操作的页面按 taskId 轮询输出。做了什么记在操作日志 */
 export interface OpsTaskRecord {
   id: number;
   /** init、start、stop、restart、deploy、rollback、config 等 */

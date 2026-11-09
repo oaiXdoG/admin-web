@@ -10,8 +10,8 @@ import { getOpsTaskApi } from '#/api';
 import { formatElapsed, taskStatusTags } from '../format';
 
 /**
- * 运维任务输出：taskId 不为空时打开，每秒轮询一次增量输出。
- * 关闭只是不再查看，任务继续在后台执行。
+ * 这次操作的 Ansible 输出：taskId 不为空时打开，每秒轮询一次增量输出。
+ * 关闭只是不再查看，操作继续在后台执行。做了什么记在操作日志。
  */
 const props = defineProps<{ taskId: null | number }>();
 const emit = defineEmits<{
@@ -80,7 +80,7 @@ async function poll(taskId: number, current: number) {
     }
   } catch {
     // 错误信息已由请求拦截器提示
-    if (current === generation) loadError.value = '读取任务输出失败';
+    if (current === generation) loadError.value = '读取输出失败';
     // 不再轮询，避免每秒弹一次错误
   }
 }
@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
 <template>
   <Drawer
     :open="taskId !== null"
-    :title="title || '运维任务'"
+    :title="title || '执行输出'"
     width="70%"
     @close="emit('close')"
   >
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
     </template>
     <div class="flex h-full flex-col gap-2">
       <div class="text-muted-foreground text-xs">
-        关闭后任务继续在后台执行，可以在运维任务里查看
+        关闭后操作继续在后台执行，结果记在操作日志里
       </div>
       <pre
         ref="outputRef"

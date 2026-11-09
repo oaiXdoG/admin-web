@@ -8,7 +8,6 @@ import type {
   OpsHostRecord,
   OpsHostWrite,
   OpsTaskDetail,
-  OpsTaskRecord,
 } from '#/api/types';
 
 import { requestClient } from '#/api/request';
@@ -218,18 +217,6 @@ export async function getOpsTaskApi(taskId: number, offset: number) {
     offset,
     taskId,
   });
-}
-
-export async function getOpsTasksApi(params: {
-  appId?: number;
-  hostId?: number;
-  page: number;
-  pageSize: number;
-}) {
-  return requestClient.post<{ items: OpsTaskRecord[]; total: number }>(
-    '/ops/task/list',
-    params,
-  );
 }
 
 async function toBase64(blob: Blob) {

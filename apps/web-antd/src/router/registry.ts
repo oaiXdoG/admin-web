@@ -94,12 +94,6 @@ export const registeredRoutes: RegisteredRoute[] = [
     title: '主机监控',
     component: '/ops-center/monitor',
   },
-  {
-    name: 'ops_task',
-    path: '/ops/task',
-    title: '运维任务',
-    component: '/ops-center/task',
-  },
 ];
 
 export function findRegisteredRoute(name: string, path?: string) {

@@ -257,11 +257,11 @@ const actionNames: Record<OpsAppAction, string> = {
   stop: '停止',
 };
 
-// ---------- 运维任务输出 ----------
+// ---------- 执行输出 ----------
 
 const taskId = ref<null | number>(null);
 
-/** 打开任务输出，并刷新列表让这一行显示「任务执行中」 */
+/** 打开这次操作的输出，并刷新列表让这一行显示「执行中」 */
 function showTask(id: number) {
   taskId.value = id;
   gridApi.query();
@@ -717,7 +717,7 @@ function rollback(backup: string) {
                 {{ statusTags[status(row)].text }}
               </Tag>
             </Tooltip>
-            <Tag v-if="row.busy" color="processing">任务执行中</Tag>
+            <Tag v-if="row.busy" color="processing">执行中</Tag>
           </div>
           <div
             v-if="row.hostOnline && (row.state?.restarts ?? 0) > 0"
@@ -955,7 +955,7 @@ function rollback(backup: string) {
     >
       <Alert
         class="mb-4"
-        message="上传 mvn package 产物目录（bin、conf、lib、excel）打成的 zip。旧的 bin、lib、excel 移入 backup，可以用「回滚」恢复；程序在运行时会先停止，发布后重新启动。不是由 systemd 启动的旧进程会被接管。"
+        message="上传 mvn package 产物目录（bin、conf、lib、excel）打成的 zip。发布前备份机器上的 conf、excel、lib、bin，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。不是由 systemd 启动的旧进程会被接管。"
         show-icon
         type="info"
       />
@@ -992,7 +992,7 @@ function rollback(backup: string) {
         v-if="deploying && deployProgress >= 100"
         class="text-muted-foreground text-sm"
       >
-        上传完成，正在提交发布任务…
+        上传完成，正在发布…
       </div>
       <template #footer>
         <Space>
@@ -1018,7 +1018,7 @@ function rollback(backup: string) {
     >
       <Alert
         class="mb-4"
-        message="当前版本会先备份，回滚后也能再回滚回来；程序原来在运行的会自动重启"
+        message="换回该次发布前备份的 conf、excel、lib、bin。当前这些目录会先再备份一份，所以还能回滚回来；程序原来在运行的会自动重启"
         show-icon
         type="info"
       />
