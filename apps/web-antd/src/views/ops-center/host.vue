@@ -308,7 +308,7 @@ function initHost(row: OpsHostRecord) {
   const again = row.initializedAt > 0;
   Modal.confirm({
     cancelText: '取消',
-    content: `${again ? '重新初始化' : '初始化'}主机 ${hostAddress(row)}？会通过 Ansible 安装 JDK 21、unzip 等运行环境，可以重复执行。`,
+    content: `${again ? '重新初始化' : '初始化'}主机 ${hostAddress(row)}？会通过 SSH 安装 JDK 21、unzip 和监控用的 exporter，可以重复执行。`,
     okText: again ? '重新初始化' : '初始化',
     title: again ? '重新初始化主机' : '初始化主机',
     async onOk() {
@@ -488,7 +488,7 @@ function remove(row: OpsHostRecord) {
     >
       <div class="mb-4">
         <Alert
-          message="管理后台用 Ansible 以 root 通过 SSH 登录这台机器，需要先把管理后台的公钥加到它的 /root/.ssh/authorized_keys"
+          message="管理后台以 root 通过 SSH 登录这台机器，需要先把管理后台的公钥加到它的 /root/.ssh/authorized_keys"
           show-icon
           type="info"
         />

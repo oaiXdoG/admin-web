@@ -120,7 +120,7 @@ export async function controlOpsAppApi(appId: number, action: OpsAppAction) {
   });
 }
 
-/** file：server.log（全部日志）或 error.log（只有 ERROR） */
+/** file：server.log（全部日志）、error.log（只有 ERROR）或 console.log（最近一次启动的控制台输出） */
 export async function getOpsAppLogApi(
   appId: number,
   lines: number,

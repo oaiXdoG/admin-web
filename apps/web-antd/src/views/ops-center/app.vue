@@ -91,65 +91,46 @@ watch(hostId, () => gridApi.query());
 // ---------- 列表 ----------
 
 type Status =
-  | 'activating'
-  | 'deactivating'
   | 'deployless'
   | 'error'
-  | 'failed'
+  | 'no-script'
   | 'offline'
   | 'running'
-  | 'stopped'
-  | 'unknown'
-  | 'unmanaged';
+  | 'stopped';
 
-/** 按 systemd 的 ActiveState 显示；不是 systemd 启动的进程显示为未托管 */
+/** 按程序目录里 bin/app.sh status 的结果显示 */
 function status(row: OpsAppRecord): Status {
   if (!row.hostOnline) return 'offline';
   if (row.error || !row.state || row.state.error) return 'error';
-  const state = row.state;
-  if (state.unmanaged) return 'unmanaged';
-  switch (state.status) {
-    case 'activating': {
-      return 'activating';
+  switch (row.state.status) {
+    case 'no-script': {
+      return 'no-script';
     }
-    case 'active': {
+    case 'not-deployed': {
+      return 'deployless';
+    }
+    case 'running': {
       return 'running';
     }
-    case 'deactivating': {
-      return 'deactivating';
-    }
-    case 'failed': {
-      return 'failed';
-    }
-    case 'inactive':
-    case 'not-found': {
-      return state.deployed ? 'stopped' : 'deployless';
-    }
     default: {
-      return 'unknown';
+      return 'stopped';
     }
   }
 }
 
 const statusTags: Record<Status, { color?: string; text: string }> = {
-  activating: { color: 'processing', text: '启动中' },
-  deactivating: { color: 'processing', text: '停止中' },
   deployless: { text: '未发布' },
   error: { color: 'error', text: '异常' },
-  failed: { color: 'error', text: '失败' },
+  'no-script': { color: 'warning', text: '缺少 bin/app.sh' },
   offline: { color: 'default', text: '主机连不上' },
   running: { color: 'success', text: '运行中' },
   stopped: { color: 'warning', text: '已停止' },
-  unknown: { text: '未知' },
-  unmanaged: { color: 'success', text: '运行中（未托管）' },
 };
 
 function statusTip(row: OpsAppRecord) {
-  const value = status(row);
-  if (value === 'unmanaged') {
-    return '不是由 systemd 启动的进程，下次启动或发布时会被接管';
+  if (status(row) === 'no-script') {
+    return '程序目录里没有 bin/app.sh，发布时会拷过去';
   }
-  if (value === 'unknown') return `systemd 状态：${row.state?.status}`;
   return row.error || row.state?.error || undefined;
 }
 
@@ -159,18 +140,15 @@ function rowBusy(row: OpsAppRecord) {
 }
 
 function isRunning(row: OpsAppRecord) {
-  const value = status(row);
-  return value === 'running' || value === 'unmanaged';
+  return status(row) === 'running';
 }
 
-/** 启动中（包括崩溃后等待自动拉起）也可以停止 */
 function canStop(row: OpsAppRecord) {
-  return isRunning(row) || status(row) === 'activating';
+  return isRunning(row);
 }
 
 function canStart(row: OpsAppRecord) {
-  const value = status(row);
-  return value === 'stopped' || value === 'failed';
+  return status(row) === 'stopped';
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -341,7 +319,6 @@ const [AppForm, formApi] = useVbenForm({
       component: 'Input',
       componentProps: { maxlength: 64, placeholder: '例如 log、logic-1' },
       fieldName: 'name',
-      help: '也是 systemd 服务名 danmu-<名称>',
       label: '名称',
       rules: z
         .string()
@@ -719,12 +696,6 @@ function rollback(backup: string) {
             </Tooltip>
             <Tag v-if="row.busy" color="processing">执行中</Tag>
           </div>
-          <div
-            v-if="row.hostOnline && (row.state?.restarts ?? 0) > 0"
-            class="text-warning text-xs"
-          >
-            systemd 自动拉起 {{ row.state?.restarts }} 次
-          </div>
         </div>
       </template>
       <template #action="{ row }">
@@ -835,7 +806,7 @@ function rollback(backup: string) {
     >
       <div class="mb-4">
         <Alert
-          message="程序目录里放 mvn package 的产物（bin、conf、lib、excel），可以先登记再用「发布」上传。程序作为 systemd 服务 danmu-<名称> 运行，执行 <目录>/bin/start.sh --foreground。JVM 参数在程序的 conf/jvm.options，用「配置文件」修改。运行中不能修改主机和目录。"
+          message="保存时把 bin/app.sh 拷到程序目录（目录不存在会创建），之后启停、发布、回滚都是执行 <目录>/bin/app.sh，在服务器上手动执行效果一样。程序目录的格式为 lib（其中一个 jar 带 Main-Class）、conf、excel，可以先登记再用「发布」上传。JVM 参数在 conf/jvm.options，用「配置文件」修改。运行中不能修改主机和目录。"
           show-icon
           type="info"
         />
@@ -862,6 +833,7 @@ function rollback(backup: string) {
             :options="[
               { label: 'server.log（全部）', value: 'server.log' },
               { label: 'error.log（错误）', value: 'error.log' },
+              { label: 'console.log（控制台）', value: 'console.log' },
             ]"
             class="w-40"
             @change="loadLog"
@@ -955,7 +927,7 @@ function rollback(backup: string) {
     >
       <Alert
         class="mb-4"
-        message="上传 mvn package 产物目录（bin、conf、lib、excel）打成的 zip。发布前备份机器上的 conf、excel、lib、bin，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。不是由 systemd 启动的旧进程会被接管。"
+        message="上传 lib、conf、excel 打成的 zip（外面可以再包一层目录，包里的 bin 不使用）。停止前先检查包里的 Main-Class；发布前备份机器上的 lib、conf、excel，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。"
         show-icon
         type="info"
       />

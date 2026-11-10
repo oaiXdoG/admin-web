@@ -10,7 +10,7 @@ import { getOpsTaskApi } from '#/api';
 import { formatElapsed, taskStatusTags } from '../format';
 
 /**
- * 这次操作的 Ansible 输出：taskId 不为空时打开，每秒轮询一次增量输出。
+ * 这次操作的输出：taskId 不为空时打开，每秒轮询一次增量输出。
  * 关闭只是不再查看，操作继续在后台执行。做了什么记在操作日志。
  */
 const props = defineProps<{ taskId: null | number }>();

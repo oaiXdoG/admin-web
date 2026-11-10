@@ -269,7 +269,7 @@ export interface OpsHostInfo {
   netOut: number;
 }
 
-/** 主机手动添加，管理后台用 Ansible 通过 SSH 管理；连不上时 info 为空，error 为原因 */
+/** 主机手动添加，管理后台通过 SSH 管理；连不上时 info 为空，error 为原因 */
 export interface OpsHostRecord {
   id: number;
   ip: string;
@@ -307,12 +307,8 @@ export interface OpsAppState {
   error: string;
   deployed: boolean;
   running: boolean;
-  /** 进程不是 systemd 启动的，下次启动或发布时会被接管 */
-  unmanaged: boolean;
-  /** systemd ActiveState：active、inactive、failed、activating、deactivating、not-found 等 */
-  status: string;
-  /** systemd 自动拉起的次数 */
-  restarts: number;
+  /** bin/app.sh status 的结果；no-script：程序目录里没有 bin/app.sh */
+  status: 'no-script' | 'not-deployed' | 'running' | 'stopped';
   pid: number;
   startTime: number;
   memory: number;
@@ -347,11 +343,11 @@ export interface OpsAppWrite {
 
 export type OpsAppAction = 'restart' | 'start' | 'stop';
 
-export type OpsAppLogFile = 'error.log' | 'server.log';
+export type OpsAppLogFile = 'console.log' | 'error.log' | 'server.log';
 
 export type OpsTaskStatus = 'failed' | 'running' | 'success';
 
-/** 一次后台执行的 Ansible：发起操作的页面按 taskId 轮询输出。做了什么记在操作日志 */
+/** 一次后台运维操作（通过 SSH 执行）：发起操作的页面按 taskId 轮询输出。做了什么记在操作日志 */
 export interface OpsTaskRecord {
   id: number;
   /** init、start、stop、restart、deploy、rollback、config 等 */
