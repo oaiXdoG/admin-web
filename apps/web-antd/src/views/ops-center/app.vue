@@ -90,22 +90,13 @@ watch(hostId, () => gridApi.query());
 
 // ---------- 列表 ----------
 
-type Status =
-  | 'deployless'
-  | 'error'
-  | 'no-script'
-  | 'offline'
-  | 'running'
-  | 'stopped';
+type Status = 'deployless' | 'error' | 'offline' | 'running' | 'stopped';
 
 /** 按程序目录里 bin/app.sh status 的结果显示 */
 function status(row: OpsAppRecord): Status {
   if (!row.hostOnline) return 'offline';
   if (row.error || !row.state || row.state.error) return 'error';
   switch (row.state.status) {
-    case 'no-script': {
-      return 'no-script';
-    }
     case 'not-deployed': {
       return 'deployless';
     }
@@ -121,16 +112,12 @@ function status(row: OpsAppRecord): Status {
 const statusTags: Record<Status, { color?: string; text: string }> = {
   deployless: { text: '未发布' },
   error: { color: 'error', text: '异常' },
-  'no-script': { color: 'warning', text: '缺少 bin/app.sh' },
   offline: { color: 'default', text: '主机连不上' },
   running: { color: 'success', text: '运行中' },
   stopped: { color: 'warning', text: '已停止' },
 };
 
 function statusTip(row: OpsAppRecord) {
-  if (status(row) === 'no-script') {
-    return '程序目录里没有 bin/app.sh，发布时会拷过去';
-  }
   return row.error || row.state?.error || undefined;
 }
 
@@ -806,7 +793,7 @@ function rollback(backup: string) {
     >
       <div class="mb-4">
         <Alert
-          message="保存时把 bin/app.sh 拷到程序目录（目录不存在会创建），之后启停、发布、回滚都是执行 <目录>/bin/app.sh，在服务器上手动执行效果一样。程序目录的格式为 lib（其中一个 jar 带 Main-Class）、conf、excel，可以先登记再用「发布」上传。JVM 参数在 conf/jvm.options，用「配置文件」修改。运行中不能修改主机和目录。"
+          message="程序包和程序目录的格式为 bin（bin/app.sh）、lib（其中一个 jar 带 Main-Class）、conf、excel。先登记再用「发布」上传，第一次发布时创建目录。启停、发布、回滚都是执行 <目录>/bin/app.sh，在服务器上手动执行效果一样。JVM 参数在 conf/jvm.options，用「配置文件」修改。运行中不能修改主机和目录。"
           show-icon
           type="info"
         />
@@ -927,7 +914,7 @@ function rollback(backup: string) {
     >
       <Alert
         class="mb-4"
-        message="上传 lib、conf、excel 打成的 zip（外面可以再包一层目录，包里的 bin 不使用）。停止前先检查包里的 Main-Class；发布前备份机器上的 lib、conf、excel，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。"
+        message="上传 bin、lib、conf、excel 打成的 zip（外面可以再包一层目录），由包里的 bin/app.sh 完成发布。停止前先检查包里的 Main-Class；发布前备份机器上的 bin、lib、conf、excel，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。"
         show-icon
         type="info"
       />

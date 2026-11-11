@@ -307,8 +307,8 @@ export interface OpsAppState {
   error: string;
   deployed: boolean;
   running: boolean;
-  /** bin/app.sh status 的结果；no-script：程序目录里没有 bin/app.sh */
-  status: 'no-script' | 'not-deployed' | 'running' | 'stopped';
+  /** bin/app.sh status 的结果；not-deployed：还没有发布（没有 bin/app.sh 或 lib 下没有 jar） */
+  status: 'not-deployed' | 'running' | 'stopped';
   pid: number;
   startTime: number;
   memory: number;
