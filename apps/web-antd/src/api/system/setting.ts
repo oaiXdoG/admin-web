@@ -1,5 +1,4 @@
 import type {
-  BackupInfo,
   OperationLogParams,
   OperationLogRow,
   SystemSetting,
@@ -27,33 +26,4 @@ export async function getOperationLogsApi(params: OperationLogParams) {
     '/system/operation-log/list',
     params,
   );
-}
-
-export async function getBackupApi() {
-  return requestClient.post<BackupInfo>('/system/backup/get', {});
-}
-
-export async function updateBackupApi(data: {
-  enabled: boolean;
-  keep: number;
-  time: string;
-}) {
-  return requestClient.post<BackupInfo>('/system/backup/update', data);
-}
-
-/** 立即备份，在服务器后台执行，用 getBackupApi 查看进度 */
-export async function runBackupApi() {
-  return requestClient.post<BackupInfo>('/system/backup/run', {});
-}
-
-/** data 是 base64 编码的备份文件 */
-export async function downloadBackupApi(name: string) {
-  return requestClient.post<{ data: string; name: string }>(
-    '/system/backup/download',
-    { name },
-  );
-}
-
-export async function removeBackupApi(name: string) {
-  return requestClient.post<null>('/system/backup/remove', { name });
 }

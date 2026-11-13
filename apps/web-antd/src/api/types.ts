@@ -125,20 +125,6 @@ export interface OperationLogParams {
   pageSize: number;
 }
 
-/** 数据库备份设置、最近一次结果和已有备份；lastSuccess 为空表示还没有备份过 */
-export interface BackupInfo {
-  enabled: boolean;
-  /** 每天备份的时间，HH:mm */
-  time: string;
-  keep: number;
-  dir: string;
-  running: boolean;
-  lastTime?: number;
-  lastSuccess?: boolean;
-  lastMessage: string;
-  files: { createdAt: number; name: string; size: number }[];
-}
-
 /** 数据源：业务服务器的查询接口（固定地址），密钥不返回，只返回是否已设置 */
 export interface DataSourceRecord {
   id: number;
@@ -254,54 +240,6 @@ export interface LogQueryResult {
   list: Record<string, unknown>[];
 }
 
-/** 运维中心：host 读取的机器信息，字节、秒、0～1 的使用率 */
-export interface OpsHostInfo {
-  hostname: string;
-  os: string;
-  cpuCores: number;
-  cpuUsage: number;
-  memoryTotal: number;
-  memoryUsed: number;
-  disks: { mount: string; total: number; used: number }[];
-  uptime: number;
-  /** 字节/秒 */
-  netIn: number;
-  netOut: number;
-}
-
-/** 主机手动添加，管理后台通过 SSH 管理；连不上时 info 为空，error 为原因 */
-export interface OpsHostRecord {
-  id: number;
-  ip: string;
-  sshPort: number;
-  hostname: string;
-  remark: string;
-  /** SSH 能连上 */
-  online: boolean;
-  /** 初始化（装 JDK、unzip）完成时间，0 表示未初始化 */
-  initializedAt: number;
-  lastSeenAt: number;
-  createdAt: number;
-  appCount: number;
-  runningCount: number;
-  error: string;
-  info?: OpsHostInfo;
-}
-
-export interface OpsHostWrite {
-  ip: string;
-  sshPort: number;
-  remark?: string;
-}
-
-export interface OpsHostOption {
-  id: number;
-  ip: string;
-  hostname: string;
-  remark: string;
-  online: boolean;
-}
-
 export interface OpsAppState {
   dir: string;
   error: string;
@@ -311,17 +249,14 @@ export interface OpsAppState {
   status: 'not-deployed' | 'running' | 'stopped';
   pid: number;
   startTime: number;
-  memory: number;
-  cpuUsage: number;
 }
 
-/** 主机不在线或读取失败时 state 为空，error 为原因 */
+/** 运维中心的程序：一台机器（ip、sshPort）上的一个目录。机器连不上或读取失败时 state 为空，error 为原因 */
 export interface OpsAppRecord {
   id: number;
   name: string;
-  hostId: number;
-  hostIp: string;
-  hostname: string;
+  ip: string;
+  sshPort: number;
   hostOnline: boolean;
   dir: string;
   remark: string;
@@ -336,24 +271,22 @@ export interface OpsAppRecord {
 
 export interface OpsAppWrite {
   name: string;
-  hostId: number;
+  ip: string;
+  sshPort: number;
   dir: string;
   remark?: string;
 }
 
 export type OpsAppAction = 'restart' | 'start' | 'stop';
 
-export type OpsAppLogFile = 'console.log' | 'error.log' | 'server.log';
-
 export type OpsTaskStatus = 'failed' | 'running' | 'success';
 
 /** 一次后台运维操作（通过 SSH 执行）：发起操作的页面按 taskId 轮询输出。做了什么记在操作日志 */
 export interface OpsTaskRecord {
   id: number;
-  /** init、start、stop、restart、deploy、rollback、config 等 */
+  /** start、stop、restart、deploy */
   type: string;
   title: string;
-  hostId: number;
   appId: number;
   account: string;
   status: OpsTaskStatus;
@@ -366,11 +299,4 @@ export interface OpsTaskDetail extends OpsTaskRecord {
   output: string;
   /** 下次轮询传这个 offset */
   offset: number;
-}
-
-export interface OpsAppOption {
-  id: number;
-  name: string;
-  dir: string;
-  remark: string;
 }

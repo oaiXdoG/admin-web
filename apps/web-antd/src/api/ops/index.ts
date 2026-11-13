@@ -1,163 +1,68 @@
 import type {
   OpsAppAction,
-  OpsAppLogFile,
-  OpsAppOption,
   OpsAppRecord,
   OpsAppWrite,
-  OpsHostOption,
-  OpsHostRecord,
-  OpsHostWrite,
   OpsTaskDetail,
 } from '#/api/types';
 
 import { requestClient } from '#/api/request';
 
-/** 要通过 SSH 连主机的同步接口 */
-const SSH_TIMEOUT = 30_000;
 /** 每片 2MB：分片只通过 HTTP 传给管理后台（请求体上限 16MB，base64 后约 2.7MB） */
 export const UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024;
 
-/** 初始化、启停、发布、回滚、保存配置在后台执行，立即返回 taskId，用 getOpsTaskApi 轮询输出 */
+/** 启停、发布在后台执行，立即返回 taskId，用 getOpsTaskApi 轮询输出 */
 interface TaskStarted {
   taskId: number;
-}
-
-export async function getOpsHostsApi() {
-  return requestClient.post<{ list: OpsHostRecord[] }>(
-    '/ops/host/list',
-    {},
-    {
-      timeout: 20_000,
-    },
-  );
-}
-
-export async function getOpsHostOptionsApi() {
-  return requestClient.post<{ list: OpsHostOption[] }>('/ops/host/options', {});
-}
-
-function trimHost(data: OpsHostWrite) {
-  return {
-    ip: data.ip.trim(),
-    remark: (data.remark ?? '').trim(),
-    sshPort: data.sshPort,
-  };
-}
-
-export async function createOpsHostApi(data: OpsHostWrite) {
-  return requestClient.post<OpsHostRecord>('/ops/host/create', trimHost(data));
-}
-
-export async function updateOpsHostApi(hostId: number, data: OpsHostWrite) {
-  return requestClient.post<null>('/ops/host/update', {
-    hostId,
-    ...trimHost(data),
-  });
-}
-
-/** 同步测试 SSH 连接，成功时返回主机名和系统 */
-export async function testOpsHostApi(hostId: number) {
-  return requestClient.post<{ message: string }>(
-    '/ops/host/test',
-    { hostId },
-    { timeout: SSH_TIMEOUT },
-  );
-}
-
-/** 安装 JDK、unzip 等 */
-export async function initOpsHostApi(hostId: number) {
-  return requestClient.post<TaskStarted>('/ops/host/init', { hostId });
-}
-
-export async function removeOpsHostApi(hostId: number) {
-  return requestClient.post<null>('/ops/host/remove', { hostId });
 }
 
 function trimApp(data: OpsAppWrite) {
   return {
     dir: data.dir.trim(),
-    hostId: data.hostId,
+    ip: data.ip.trim(),
     name: data.name.trim(),
     remark: (data.remark ?? '').trim(),
+    sshPort: data.sshPort,
   };
 }
 
-/** hostId 为空时返回全部主机上的程序 */
-export async function getOpsAppsApi(hostId?: number) {
-  return requestClient.post<{ list: OpsAppRecord[] }>(
+/** ip 为空时返回全部程序；ips 为所有程序用到的 IP，给筛选下拉框 */
+export async function getOpsAppsApi(ip?: string) {
+  return requestClient.post<{ ips: string[]; list: OpsAppRecord[] }>(
     '/ops/app/list',
-    { hostId },
+    { ip },
     { timeout: 20_000 },
   );
 }
 
-export async function getOpsAppOptionsApi(hostId: number) {
-  return requestClient.post<{ list: OpsAppOption[] }>('/ops/app/options', {
-    hostId,
-  });
-}
-
-
+/** 保存前先 SSH 连一次，连不上不保存 */
 export async function createOpsAppApi(data: OpsAppWrite) {
-  return requestClient.post<OpsAppRecord>('/ops/app/create', trimApp(data));
-}
-
-export async function updateOpsAppApi(appId: number, data: OpsAppWrite) {
-  return requestClient.post<OpsAppRecord>('/ops/app/update', {
-    appId,
-    ...trimApp(data),
+  return requestClient.post<OpsAppRecord>('/ops/app/create', trimApp(data), {
+    timeout: 30_000,
   });
 }
 
+/** 改了 IP 或端口时先 SSH 连一次，连不上不保存 */
+export async function updateOpsAppApi(appId: number, data: OpsAppWrite) {
+  return requestClient.post<null>(
+    '/ops/app/update',
+    { appId, ...trimApp(data) },
+    { timeout: 30_000 },
+  );
+}
+
+/** 只删记录；运行中的要先关闭 */
 export async function removeOpsAppApi(appId: number) {
-  return requestClient.post<null>('/ops/app/remove', { appId });
+  return requestClient.post<null>(
+    '/ops/app/remove',
+    { appId },
+    { timeout: 40_000 },
+  );
 }
 
 export async function controlOpsAppApi(appId: number, action: OpsAppAction) {
   return requestClient.post<TaskStarted>('/ops/app/control', {
     action,
     appId,
-  });
-}
-
-/** file：server.log（全部日志）、error.log（只有 ERROR）或 console.log（最近一次启动的控制台输出） */
-export async function getOpsAppLogApi(
-  appId: number,
-  lines: number,
-  file: OpsAppLogFile,
-) {
-  return requestClient.post<{ content: string }>('/ops/app/log', {
-    appId,
-    file,
-    lines,
-  });
-}
-
-export async function getOpsAppConfigFilesApi(appId: number) {
-  return requestClient.post<{ files: string[] }>('/ops/app/config/list', {
-    appId,
-  });
-}
-
-export async function getOpsAppConfigApi(appId: number, file: string) {
-  return requestClient.post<{ content: string }>('/ops/app/config/get', {
-    appId,
-    file,
-  });
-}
-
-/** restart 为 true 时保存后重启程序 */
-export async function saveOpsAppConfigApi(
-  appId: number,
-  file: string,
-  content: string,
-  restart: boolean,
-) {
-  return requestClient.post<TaskStarted>('/ops/app/config/save', {
-    appId,
-    content,
-    file,
-    restart,
   });
 }
 
@@ -192,22 +97,6 @@ export async function deployOpsAppApi(
     appId,
     overwriteConf,
     uploadId,
-  });
-}
-
-/** 备份名形如 20261106-074714，新的在前 */
-export async function getOpsAppBackupsApi(appId: number) {
-  return requestClient.post<{ list: string[] }>(
-    '/ops/app/backups',
-    { appId },
-    { timeout: SSH_TIMEOUT },
-  );
-}
-
-export async function rollbackOpsAppApi(appId: number, backup: string) {
-  return requestClient.post<TaskStarted>('/ops/app/rollback', {
-    appId,
-    backup,
   });
 }
 

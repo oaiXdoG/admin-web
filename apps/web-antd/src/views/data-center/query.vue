@@ -162,7 +162,7 @@ function toTableRow(row: Record<string, unknown>) {
 function resultColumns(fields: Parameters<typeof mappedColumns>[0]) {
   return [
     ...mappedColumns(fields),
-    { field: 'operation', fixed: 'right' as const, slots: { default: 'detail' }, title: '操作', width: 72 },
+    { field: 'operation', fixed: 'right' as const, resizable: false, slots: { default: 'detail' }, title: '操作', width: 72 },
   ];
 }
 

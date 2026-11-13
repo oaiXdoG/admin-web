@@ -77,22 +77,10 @@ export const registeredRoutes: RegisteredRoute[] = [
   },
   { name: 'ops', path: '/ops', title: '运维中心', directory: true },
   {
-    name: 'ops_host',
-    path: '/ops/host',
-    title: '主机管理',
-    component: '/ops-center/host',
-  },
-  {
     name: 'ops_app',
     path: '/ops/app',
     title: '程序管理',
     component: '/ops-center/app',
-  },
-  {
-    name: 'ops_monitor',
-    path: '/ops/monitor',
-    title: '主机监控',
-    component: '/ops-center/monitor',
   },
 ];
 

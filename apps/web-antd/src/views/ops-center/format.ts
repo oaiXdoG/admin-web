@@ -32,12 +32,6 @@ export function percent(ratio: number) {
   return Math.min(100, Math.max(0, Math.round((ratio || 0) * 100)));
 }
 
-/** 超过 90% 红色，超过 70% 橙色 */
-export function usageColor(value: number) {
-  if (value >= 90) return '#ff4d4f';
-  return value >= 70 ? '#fa8c16' : undefined;
-}
-
 /** 毫秒 → 8 秒、1 分 5 秒、1 小时 2 分；任务耗时用 */
 export function formatElapsed(millis: number) {
   if (!millis || millis < 0) return '0 秒';
@@ -50,13 +44,10 @@ export function formatElapsed(millis: number) {
 }
 
 export const taskTypeNames: Record<string, string> = {
-  config: '保存配置',
   deploy: '发布',
-  init: '初始化',
   restart: '重启',
-  rollback: '回滚',
   start: '启动',
-  stop: '停止',
+  stop: '关闭',
 };
 
 export const taskStatusTags: Record<string, { color: string; text: string }> = {

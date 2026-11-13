@@ -2,15 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type {
   OpsAppAction,
-  OpsAppLogFile,
   OpsAppRecord,
   OpsAppWrite,
-  OpsHostOption,
-  OpsTaskStatus,
 } from '#/api/types';
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
@@ -20,21 +16,12 @@ import {
   Alert,
   Button,
   Checkbox,
-  Drawer,
-  Dropdown,
-  Empty,
-  List,
-  ListItem,
-  Menu,
-  MenuItem,
   message,
   Modal,
   Progress,
   Select,
   Space,
-  Switch,
   Tag,
-  Textarea,
   Tooltip,
   UploadDragger,
 } from 'ant-design-vue';
@@ -45,80 +32,82 @@ import {
   controlOpsAppApi,
   createOpsAppApi,
   deployOpsAppApi,
-  getOpsAppBackupsApi,
-  getOpsAppConfigApi,
-  getOpsAppConfigFilesApi,
-  getOpsAppLogApi,
   getOpsAppsApi,
-  getOpsHostOptionsApi,
   removeOpsAppApi,
-  rollbackOpsAppApi,
-  saveOpsAppConfigApi,
   updateOpsAppApi,
 } from '#/api';
 
 import TaskOutput from './components/task-output.vue';
 import { formatBytes, formatDuration, formatTime, percent } from './format';
 
-const { hasAccessByCodes } = useAccess();
-const route = useRoute();
-const router = useRouter();
-/** 监控是页面菜单，不在按钮权限码里，按路由是否存在判断 */
-const canMonitor = router.hasRoute('ops_monitor');
+/** 列表每 5 秒在后台刷新 */
+const REFRESH_MS = 5000;
 
-const hosts = ref<OpsHostOption[]>([]);
-/** 为空表示全部主机 */
-const hostId = ref<number | undefined>(
-  route.query.hostId ? Number(route.query.hostId) : undefined,
-);
+const { hasAccessByCodes } = useAccess();
+
+/** 所有程序用到的 IP，每次读取列表时更新 */
+const ips = ref<string[]>([]);
+/** 为空表示全部 IP */
+const ip = ref<string>();
 /** 正在提交启停任务的程序，按钮显示加载中 */
 const submitting = ref(new Set<number>());
 
-const hostOptions = computed(() =>
-  hosts.value.map((host) => ({
-    label: `${host.ip}${host.hostname ? `（${host.hostname}）` : ''}${host.remark ? ` ${host.remark}` : ''}${host.online ? '' : ' [连不上]'}`,
-    value: host.id,
-  })),
+const ipOptions = computed(() =>
+  ips.value.map((value) => ({ label: value, value })),
 );
 
-onMounted(async () => {
-  const { list } = await getOpsHostOptionsApi();
-  hosts.value = list;
-});
+let refreshing = false;
+let timer: ReturnType<typeof setInterval> | undefined;
 
-watch(hostId, () => gridApi.query());
-
-// ---------- 列表 ----------
-
-type Status = 'deployless' | 'error' | 'offline' | 'running' | 'stopped';
-
-/** 按程序目录里 bin/app.sh status 的结果显示 */
-function status(row: OpsAppRecord): Status {
-  if (!row.hostOnline) return 'offline';
-  if (row.error || !row.state || row.state.error) return 'error';
-  switch (row.state.status) {
-    case 'not-deployed': {
-      return 'deployless';
+/** 表格原地更新、不显示加载遮罩；上一次没返回、页面在后台时跳过 */
+async function refreshInBackground() {
+  if (refreshing || document.hidden) return;
+  refreshing = true;
+  const current = ip.value;
+  try {
+    const result = await getOpsAppsApi(current);
+    // 等待期间切换了 IP 时丢掉这次结果
+    if (current === ip.value) {
+      ips.value = result.ips;
+      await gridApi.grid.loadData(result.list);
     }
-    case 'running': {
-      return 'running';
-    }
-    default: {
-      return 'stopped';
-    }
+  } catch {
+    // 失败时等下一次
+  } finally {
+    refreshing = false;
   }
 }
 
-const statusTags: Record<Status, { color?: string; text: string }> = {
-  deployless: { text: '未发布' },
-  error: { color: 'error', text: '异常' },
-  offline: { color: 'default', text: '主机连不上' },
-  running: { color: 'success', text: '运行中' },
-  stopped: { color: 'warning', text: '已停止' },
-};
+/** 切回这个标签页时立刻刷新一次 */
+function onVisibilityChange() {
+  if (!document.hidden) refreshInBackground();
+}
 
-function statusTip(row: OpsAppRecord) {
-  return row.error || row.state?.error || undefined;
+onMounted(() => {
+  timer = setInterval(refreshInBackground, REFRESH_MS);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(timer);
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+});
+
+watch(ip, () => gridApi.query());
+
+// ---------- 列表 ----------
+
+/** 端口不是 22 时带上端口 */
+function address(row: OpsAppRecord) {
+  return row.sshPort && row.sshPort !== 22 ? `${row.ip}:${row.sshPort}` : row.ip;
+}
+
+function isRunning(row: OpsAppRecord) {
+  return !!row.state?.running;
+}
+
+function canStart(row: OpsAppRecord) {
+  return row.hostOnline && row.state?.status === 'stopped';
 }
 
 /** 有任务在执行（或正在提交）时禁用会改动程序的操作 */
@@ -126,41 +115,49 @@ function rowBusy(row: OpsAppRecord) {
   return row.busy || submitting.value.has(row.id);
 }
 
-function isRunning(row: OpsAppRecord) {
-  return status(row) === 'running';
+/** 没有运行时，最近启动时间悬停显示原因 */
+/** 状态列：运行中、已关闭、未发布、连不上；有操作在执行时显示执行中 */
+function statusTag(row: OpsAppRecord) {
+  if (row.busy) return { color: 'processing', text: '执行中' };
+  if (!row.hostOnline) return { color: 'warning', text: '连不上' };
+  switch (row.state?.status) {
+    case 'not-deployed': {
+      return { color: 'default', text: '未发布' };
+    }
+    case 'running': {
+      return { color: 'success', text: '运行中' };
+    }
+    default: {
+      return { color: 'default', text: '已关闭' };
+    }
+  }
 }
 
-function canStop(row: OpsAppRecord) {
-  return isRunning(row);
-}
-
-function canStart(row: OpsAppRecord) {
-  return status(row) === 'stopped';
+function stateTip(row: OpsAppRecord) {
+  if (!row.hostOnline) return row.error || '连不上这台机器';
+  if (row.error || row.state?.error) return row.error || row.state?.error;
+  if (row.state?.status === 'not-deployed') return '还没有发布';
+  return '已关闭';
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: [
-      { align: 'left', field: 'name', title: '名称', minWidth: 140 },
+      { align: 'left', field: 'name', minWidth: 140, title: '进程名称' },
       {
         align: 'left',
-        field: 'host',
-        slots: { default: 'host' },
-        title: '主机',
-        minWidth: 160,
+        field: 'ip',
+        formatter: ({ row }) => address(row),
+        minWidth: 150,
+        title: 'IP',
       },
       { align: 'left', field: 'dir', minWidth: 200, title: '目录' },
+      { field: 'status', slots: { default: 'status' }, title: '状态', width: 100 },
       {
-        field: 'status',
-        slots: { default: 'status' },
-        title: '状态',
-        minWidth: 140,
-      },
-      {
-        field: 'pid',
-        formatter: ({ row }) => (row.state?.running ? row.state.pid : '—'),
-        title: 'PID',
-        minWidth: 80,
+        field: 'startTime',
+        minWidth: 170,
+        slots: { default: 'startTime' },
+        title: '最近启动时间',
       },
       {
         field: 'uptime',
@@ -168,36 +165,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
           row.state?.running
             ? formatDuration((Date.now() - row.state.startTime) / 1000)
             : '—',
-        title: '运行时长',
         minWidth: 110,
+        title: '运行时长',
       },
-      {
-        field: 'memory',
-        formatter: ({ row }) =>
-          row.state?.running ? formatBytes(row.state.memory) : '—',
-        title: '内存',
-        minWidth: 90,
-      },
-      {
-        field: 'cpu',
-        formatter: ({ row }) =>
-          row.state?.running ? `${percent(row.state.cpuUsage)}%` : '—',
-        title: 'CPU',
-        minWidth: 70,
-      },
-      {
-        field: 'deployedAt',
-        formatter: ({ cellValue }) => formatTime(cellValue),
-        title: '最近发布',
-        minWidth: 170,
-      },
-      { align: 'left', field: 'remark', minWidth: 120, title: '备注' },
       {
         field: 'operation',
         fixed: 'right',
+        resizable: false,
         slots: { default: 'action' },
         title: '操作',
-        width: 250,
+        width: 330,
       },
     ],
     height: 'auto',
@@ -205,12 +182,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
-          const { list } = await getOpsAppsApi(hostId.value);
-          return { items: list, total: list.length };
+          const result = await getOpsAppsApi(ip.value);
+          ips.value = result.ips;
+          return { items: result.list, total: result.list.length };
         },
       },
     },
-    cellConfig: { height: 58 },
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, refresh: true, zoom: true },
   } as VxeTableGridOptions<OpsAppRecord>,
@@ -219,22 +196,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
 const actionNames: Record<OpsAppAction, string> = {
   restart: '重启',
   start: '启动',
-  stop: '停止',
+  stop: '关闭',
 };
 
 // ---------- 执行输出 ----------
 
 const taskId = ref<null | number>(null);
 
-/** 打开这次操作的输出，并刷新列表让这一行显示「执行中」 */
+/** 打开这次操作的输出，并刷新列表 */
 function showTask(id: number) {
   taskId.value = id;
   gridApi.query();
-}
-
-function onTaskFinished(taskStatus: OpsTaskStatus) {
-  gridApi.query();
-  if (taskStatus === 'success') reloadConfigAfterTask();
 }
 
 function control(row: OpsAppRecord, action: OpsAppAction) {
@@ -257,7 +229,7 @@ function control(row: OpsAppRecord, action: OpsAppAction) {
   }
   Modal.confirm({
     cancelText: '取消',
-    content: `${actionNames[action]}「${row.name}」（${row.hostIp} ${row.dir}）？`,
+    content: `${actionNames[action]}「${row.name}」（${address(row)} ${row.dir}）？`,
     okButtonProps: { danger: action === 'stop' },
     okText: actionNames[action],
     title: `${actionNames[action]}程序`,
@@ -265,37 +237,9 @@ function control(row: OpsAppRecord, action: OpsAppAction) {
   });
 }
 
-function remove(row: OpsAppRecord) {
-  Modal.confirm({
-    cancelText: '取消',
-    content: `删除程序「${row.name}」的配置？机器上的目录和文件不会删除。`,
-    okButtonProps: { danger: true },
-    okText: '删除',
-    title: '删除程序',
-    async onOk() {
-      await removeOpsAppApi(row.id);
-      message.success('程序已删除');
-      await gridApi.query();
-    },
-  });
-}
+// ---------- 新增、编辑、删除 ----------
 
-function onMore(row: OpsAppRecord, key: string) {
-  if (key === 'config') openConfig(row);
-  else if (key === 'edit') openEditor(row);
-  else if (key === 'restart') control(row, 'restart');
-  else if (key === 'rollback') openRollback(row);
-  else if (key === 'remove') remove(row);
-  else if (key === 'monitor') {
-    router.push({
-      path: '/ops/monitor',
-      query: { appId: String(row.id), hostId: String(row.hostId) },
-    });
-  }
-}
-
-// ---------- 新增、编辑 ----------
-
+/** 为空表示新增 */
 const editing = ref<null | OpsAppRecord>(null);
 const editorOpen = ref(false);
 const saving = ref(false);
@@ -313,14 +257,19 @@ const [AppForm, formApi] = useVbenForm({
         .regex(/^[\w.-]{1,64}$/, { message: '只能包含字母、数字、_ . -' }),
     },
     {
-      component: 'Select',
-      componentProps: () => ({
-        options: hostOptions.value,
-        placeholder: '选择主机',
-      }),
-      fieldName: 'hostId',
-      label: '主机',
-      rules: 'selectRequired',
+      component: 'Input',
+      componentProps: { maxlength: 64, placeholder: '例如 10.0.0.12' },
+      fieldName: 'ip',
+      label: 'IP',
+      rules: z.string().trim().min(1, { message: '请输入 IP' }),
+    },
+    {
+      component: 'InputNumber',
+      componentProps: { max: 65_535, min: 1, precision: 0 },
+      defaultValue: 22,
+      fieldName: 'sshPort',
+      label: 'SSH 端口',
+      rules: 'required',
     },
     {
       component: 'Input',
@@ -345,19 +294,20 @@ const [AppForm, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-async function openEditor(record: null | OpsAppRecord) {
-  editing.value = record;
+async function openEditor(row: null | OpsAppRecord) {
+  editing.value = row;
   editorOpen.value = true;
   await formApi.reset();
   await formApi.setValues(
-    record
+    row
       ? {
-          dir: record.dir,
-          hostId: record.hostId,
-          name: record.name,
-          remark: record.remark,
+          dir: row.dir,
+          ip: row.ip,
+          name: row.name,
+          remark: row.remark,
+          sshPort: row.sshPort || 22,
         }
-      : { hostId: hostId.value },
+      : { ip: ip.value },
   );
 }
 
@@ -380,178 +330,27 @@ async function save() {
   }
 }
 
-// ---------- 日志 ----------
-
-const logApp = ref<null | OpsAppRecord>(null);
-const logLines = ref(200);
-const logFile = ref<OpsAppLogFile>('server.log');
-const logContent = ref('');
-const logLoading = ref(false);
-const logFollow = ref(true);
-const logRef = ref<HTMLElement>();
-let logTimer: ReturnType<typeof setInterval> | undefined;
-
-async function loadLog() {
-  if (!logApp.value) return;
-  logLoading.value = true;
-  try {
-    const { content } = await getOpsAppLogApi(
-      logApp.value.id,
-      logLines.value,
-      logFile.value,
-    );
-    logContent.value = content;
-    if (logFollow.value) {
-      requestAnimationFrame(() => {
-        if (logRef.value) logRef.value.scrollTop = logRef.value.scrollHeight;
-      });
-    }
-  } catch {
-    stopLogTimer();
-  } finally {
-    logLoading.value = false;
-  }
+function remove(row: OpsAppRecord) {
+  Modal.confirm({
+    cancelText: '取消',
+    content: `删除「${row.name}」（${address(row)} ${row.dir}）？只删除管理后台里的记录，不会停止进程，也不会删除服务器上的文件。`,
+    okButtonProps: { danger: true },
+    okText: '删除',
+    title: '删除程序',
+    async onOk() {
+      await removeOpsAppApi(row.id);
+      message.success('程序已删除');
+      await gridApi.query();
+    },
+  });
 }
 
-function stopLogTimer() {
-  if (logTimer) clearInterval(logTimer);
-  logTimer = undefined;
-}
-
-function openLog(row: OpsAppRecord) {
-  logApp.value = row;
-  logContent.value = '';
-  loadLog();
-  stopLogTimer();
-  if (logFollow.value) logTimer = setInterval(loadLog, 3000);
-}
-
-watch(logFollow, (follow) => {
-  stopLogTimer();
-  if (follow && logApp.value) logTimer = setInterval(loadLog, 3000);
-});
-
-function closeLog() {
-  stopLogTimer();
-  logApp.value = null;
-}
-
-onBeforeUnmount(stopLogTimer);
-
-// ---------- 配置文件 ----------
-
-const configApp = ref<null | OpsAppRecord>(null);
-const configFiles = ref<string[]>([]);
-const configFile = ref<string>();
-const configContent = ref('');
-const configOriginal = ref('');
-const configLoading = ref(false);
-const configSaving = ref(false);
-/** 保存任务提交后记下文件，任务成功时重新读取 */
-let configTask: undefined | { appId: number; file: string; taskId: number };
-const configDirty = computed(
-  () => configContent.value !== configOriginal.value,
-);
-
-async function openConfig(row: OpsAppRecord) {
-  configApp.value = row;
-  configFiles.value = [];
-  configFile.value = undefined;
-  configContent.value = '';
-  configOriginal.value = '';
-  configLoading.value = true;
-  try {
-    const { files } = await getOpsAppConfigFilesApi(row.id);
-    configFiles.value = files;
-    const first =
-      configFiles.value.find((file) => file === 'application.properties') ??
-      configFiles.value[0];
-    if (first) await selectConfig(first);
-  } catch {
-    configApp.value = null;
-  } finally {
-    configLoading.value = false;
-  }
-}
-
-async function selectConfig(file: string) {
-  if (!configApp.value) return;
-  if (configDirty.value) {
-    const ok = await new Promise<boolean>((resolve) =>
-      Modal.confirm({
-        cancelText: '继续编辑',
-        content: `「${configFile.value}」的修改还没有保存，放弃修改？`,
-        okText: '放弃',
-        onCancel: () => resolve(false),
-        onOk: () => resolve(true),
-        title: '未保存的修改',
-      }),
-    );
-    if (!ok) return;
-  }
-  configLoading.value = true;
-  try {
-    const { content } = await getOpsAppConfigApi(configApp.value.id, file);
-    configFile.value = file;
-    configContent.value = content;
-    configOriginal.value = content;
-  } catch {
-    // 错误信息已由请求拦截器提示
-  } finally {
-    configLoading.value = false;
-  }
-}
-
-async function saveConfig(restart: boolean) {
-  if (!configApp.value || !configFile.value) return;
-  configSaving.value = true;
-  try {
-    const result = await saveOpsAppConfigApi(
-      configApp.value.id,
-      configFile.value,
-      configContent.value,
-      restart,
-    );
-    configTask = {
-      appId: configApp.value.id,
-      file: configFile.value,
-      taskId: result.taskId,
-    };
-    // 保存在后台执行，先当作已保存；失败时内容还在编辑框里，可以再保存
-    configOriginal.value = configContent.value;
-    showTask(result.taskId);
-  } catch {
-    // 错误信息已由请求拦截器提示
-  } finally {
-    configSaving.value = false;
-  }
-}
-
-/** 保存任务成功后重新读取文件；编辑框里又有新修改时不覆盖 */
-async function reloadConfigAfterTask() {
-  const task = configTask;
-  if (!task || task.taskId !== taskId.value) return;
-  configTask = undefined;
-  if (
-    configApp.value?.id !== task.appId ||
-    configFile.value !== task.file ||
-    configDirty.value
-  ) {
-    return;
-  }
-  try {
-    const { content } = await getOpsAppConfigApi(task.appId, task.file);
-    if (
-      configApp.value?.id === task.appId &&
-      configFile.value === task.file &&
-      !configDirty.value
-    ) {
-      configContent.value = content;
-      configOriginal.value = content;
-    }
-  } catch {
-    // 错误信息已由请求拦截器提示
-  }
+/** 删除按钮不可点时的原因 */
+function removeTip(row: OpsAppRecord) {
+  if (rowBusy(row)) return '有操作正在执行';
+  if (isRunning(row)) return '运行中，请先关闭';
+  if (!row.hostOnline) return '连不上这台机器，无法确认是否已关闭';
+  return undefined;
 }
 
 // ---------- 发布 ----------
@@ -597,50 +396,6 @@ async function deploy() {
     deploying.value = false;
   }
 }
-
-// ---------- 回滚 ----------
-
-const rollbackApp = ref<null | OpsAppRecord>(null);
-const backups = ref<string[]>([]);
-const backupsLoading = ref(false);
-
-async function openRollback(row: OpsAppRecord) {
-  rollbackApp.value = row;
-  backups.value = [];
-  backupsLoading.value = true;
-  try {
-    const { list } = await getOpsAppBackupsApi(row.id);
-    if (rollbackApp.value?.id === row.id) backups.value = list;
-  } catch {
-    rollbackApp.value = null;
-  } finally {
-    backupsLoading.value = false;
-  }
-}
-
-/** 20261106-074714 → 2026-11-06 07:47:14，不是这个格式时原样显示 */
-function backupTime(name: string) {
-  const match = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(name);
-  if (!match) return name;
-  const [, y, mo, d, h, mi, se] = match;
-  return `${y}-${mo}-${d} ${h}:${mi}:${se}`;
-}
-
-function rollback(backup: string) {
-  const app = rollbackApp.value;
-  if (!app) return;
-  Modal.confirm({
-    cancelText: '取消',
-    content: `把「${app.name}」（${app.hostIp} ${app.dir}）回滚到 ${backupTime(backup)} 备份的版本？`,
-    okText: '回滚',
-    title: '回滚程序',
-    async onOk() {
-      const result = await rollbackOpsAppApi(app.id, backup);
-      rollbackApp.value = null;
-      showTask(result.taskId);
-    },
-  });
-}
 </script>
 
 <template>
@@ -648,11 +403,11 @@ function rollback(backup: string) {
     <Grid table-title="程序">
       <template #toolbar-actions>
         <Select
-          v-model:value="hostId"
-          :options="hostOptions"
+          v-model:value="ip"
+          :options="ipOptions"
           allow-clear
-          class="ml-4 w-72"
-          placeholder="全部主机"
+          class="ml-4 w-56"
+          placeholder="全部 IP"
         />
       </template>
       <template #toolbar-tools>
@@ -667,40 +422,23 @@ function rollback(backup: string) {
           新增程序
         </Button>
       </template>
-      <template #host="{ row }">
-        <div>{{ row.hostIp }}</div>
-        <div v-if="row.hostname" class="text-muted-foreground text-xs">
-          {{ row.hostname }}
-        </div>
-      </template>
       <template #status="{ row }">
-        <div class="leading-relaxed">
-          <div>
-            <Tooltip :title="statusTip(row)">
-              <Tag :color="statusTags[status(row)].color">
-                {{ statusTags[status(row)].text }}
-              </Tag>
-            </Tooltip>
-            <Tag v-if="row.busy" color="processing">执行中</Tag>
-          </div>
-        </div>
+        <Tooltip :title="row.hostOnline ? undefined : row.error">
+          <Tag :color="statusTag(row).color">{{ statusTag(row).text }}</Tag>
+        </Tooltip>
+      </template>
+      <template #startTime="{ row }">
+        <span v-if="row.state?.running">
+          {{ formatTime(row.state.startTime) }}
+        </span>
+        <Tooltip v-else :title="stateTip(row)">
+          <span class="text-muted-foreground">—</span>
+        </Tooltip>
       </template>
       <template #action="{ row }">
         <template v-if="hasAccessByCodes(['ops_app:control'])">
           <Button
-            v-if="canStop(row)"
-            :disabled="row.busy"
-            :loading="submitting.has(row.id)"
-            danger
-            size="small"
-            type="link"
-            @click="control(row, 'stop')"
-          >
-            停止
-          </Button>
-          <Button
-            v-else
-            :disabled="!canStart(row) || row.busy"
+            :disabled="!canStart(row) || rowBusy(row)"
             :loading="submitting.has(row.id)"
             size="small"
             type="link"
@@ -708,15 +446,24 @@ function rollback(backup: string) {
           >
             启动
           </Button>
+          <Button
+            :disabled="!isRunning(row) || rowBusy(row)"
+            danger
+            size="small"
+            type="link"
+            @click="control(row, 'stop')"
+          >
+            关闭
+          </Button>
+          <Button
+            :disabled="!isRunning(row) || rowBusy(row)"
+            size="small"
+            type="link"
+            @click="control(row, 'restart')"
+          >
+            重启
+          </Button>
         </template>
-        <Button
-          :disabled="!row.hostOnline"
-          size="small"
-          type="link"
-          @click="openLog(row)"
-        >
-          日志
-        </Button>
         <Button
           v-if="hasAccessByCodes(['ops_app:deploy'])"
           :disabled="!row.hostOnline || rowBusy(row)"
@@ -726,74 +473,39 @@ function rollback(backup: string) {
         >
           发布
         </Button>
-        <Dropdown>
-          <Button size="small" type="link">
-            更多
-            <IconifyIcon
-              class="ml-1 inline size-3"
-              icon="lucide:chevron-down"
-            />
+        <template v-if="hasAccessByCodes(['ops_app:manage'])">
+          <Button
+            :disabled="rowBusy(row)"
+            size="small"
+            type="link"
+            @click="openEditor(row)"
+          >
+            编辑
           </Button>
-          <template #overlay>
-            <Menu @click="({ key }) => onMore(row, String(key))">
-              <MenuItem
-                v-if="hasAccessByCodes(['ops_app:control'])"
-                key="restart"
-                :disabled="!isRunning(row) || rowBusy(row)"
-              >
-                重启
-              </MenuItem>
-              <MenuItem
-                v-if="hasAccessByCodes(['ops_app:deploy'])"
-                key="rollback"
-                :disabled="!row.hostOnline || rowBusy(row)"
-              >
-                回滚
-              </MenuItem>
-              <MenuItem
-                v-if="canMonitor"
-                key="monitor"
-                :disabled="!row.hostOnline"
-              >
-                监控
-              </MenuItem>
-              <MenuItem
-                v-if="hasAccessByCodes(['ops_app:config'])"
-                key="config"
-                :disabled="!row.hostOnline || rowBusy(row)"
-              >
-                配置文件
-              </MenuItem>
-              <MenuItem
-                v-if="hasAccessByCodes(['ops_app:manage'])"
-                key="edit"
-                :disabled="rowBusy(row)"
-              >
-                编辑
-              </MenuItem>
-              <MenuItem
-                v-if="hasAccessByCodes(['ops_app:manage'])"
-                key="remove"
-                :disabled="isRunning(row) || rowBusy(row)"
-                danger
-              >
-                删除
-              </MenuItem>
-            </Menu>
-          </template>
-        </Dropdown>
+          <Tooltip :title="removeTip(row)">
+            <Button
+              :disabled="!!removeTip(row)"
+              danger
+              size="small"
+              type="link"
+              @click="remove(row)"
+            >
+              删除
+            </Button>
+          </Tooltip>
+        </template>
       </template>
     </Grid>
 
     <Modal
       v-model:open="editorOpen"
-      :title="editing ? '编辑程序' : '新增程序'"
+      :title="editing ? `编辑程序：${editing.name}` : '新增程序'"
       :width="620"
       destroy-on-close
     >
       <div class="mb-4">
         <Alert
-          message="程序包和程序目录的格式为 bin（bin/app.sh）、lib（其中一个 jar 带 Main-Class）、conf、excel。先登记再用「发布」上传，第一次发布时创建目录。启停、发布、回滚都是执行 <目录>/bin/app.sh，在服务器上手动执行效果一样。JVM 参数在 conf/jvm.options，用「配置文件」修改。运行中不能修改主机和目录。"
+          message="管理后台以 root 通过 SSH 登录这台机器，需要先把管理后台的公钥加到它的 /root/.ssh/authorized_keys；保存时会先连一次，连不上不保存。程序包和程序目录的格式为 bin（bin/app.sh）、lib（其中一个 jar 带 Main-Class）、conf、excel，先登记再用「发布」上传，第一次发布时创建目录。"
           show-icon
           type="info"
         />
@@ -807,114 +519,17 @@ function rollback(backup: string) {
       </template>
     </Modal>
 
-    <Drawer
-      :open="!!logApp"
-      :title="`日志：${logApp?.name ?? ''}（${logApp?.hostIp ?? ''} ${logApp?.dir ?? ''}/logs/${logFile}）`"
-      width="70%"
-      @close="closeLog"
-    >
-      <template #extra>
-        <Space>
-          <Select
-            v-model:value="logFile"
-            :options="[
-              { label: 'server.log（全部）', value: 'server.log' },
-              { label: 'error.log（错误）', value: 'error.log' },
-              { label: 'console.log（控制台）', value: 'console.log' },
-            ]"
-            class="w-40"
-            @change="loadLog"
-          />
-          <Select
-            v-model:value="logLines"
-            :options="
-              [200, 500, 1000, 2000].map((value) => ({
-                label: `最后 ${value} 行`,
-                value,
-              }))
-            "
-            class="w-32"
-            @change="loadLog"
-          />
-          <span class="text-sm">自动刷新</span>
-          <Switch v-model:checked="logFollow" size="small" />
-          <Button :loading="logLoading" @click="loadLog">刷新</Button>
-        </Space>
-      </template>
-      <pre
-        ref="logRef"
-        class="bg-muted m-0 h-full overflow-auto whitespace-pre-wrap break-all rounded p-3 font-mono text-xs leading-5"
-        >{{ logContent || '（暂无日志）' }}</pre>
-    </Drawer>
-
-    <Modal
-      :open="!!configApp"
-      :title="`配置文件：${configApp?.name ?? ''}（${configApp?.dir ?? ''}/conf）`"
-      :width="1000"
-      destroy-on-close
-      @cancel="configApp = null"
-    >
-      <div v-if="configFiles.length === 0 && !configLoading" class="py-8">
-        <Empty description="conf 目录下没有文件，请先发布程序" />
-      </div>
-      <div v-else class="flex h-[60vh] gap-3">
-        <div class="w-56 shrink-0 overflow-auto">
-          <Menu
-            :selected-keys="configFile ? [configFile] : []"
-            mode="inline"
-            @click="({ key }) => selectConfig(String(key))"
-          >
-            <MenuItem v-for="file in configFiles" :key="file">
-              {{ file }}
-            </MenuItem>
-          </Menu>
-        </div>
-        <div class="min-w-0 flex-1">
-          <Textarea
-            v-model:value="configContent"
-            :disabled="configLoading"
-            :spellcheck="false"
-            class="font-mono text-xs"
-            style="height: 100%; resize: none"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <Space>
-          <span v-if="configDirty" class="text-warning text-sm">有未保存的修改</span>
-          <span class="text-muted-foreground text-sm">重启程序后生效</span>
-          <Button @click="configApp = null">关闭</Button>
-          <Button
-            :disabled="!configFile || !configDirty"
-            :loading="configSaving"
-            @click="saveConfig(false)"
-          >
-            保存
-          </Button>
-          <Button
-            v-if="hasAccessByCodes(['ops_app:control'])"
-            :disabled="!configFile || !configDirty"
-            :loading="configSaving"
-            type="primary"
-            @click="saveConfig(true)"
-          >
-            保存并重启
-          </Button>
-        </Space>
-      </template>
-    </Modal>
-
     <Modal
       :closable="!deploying"
       :mask-closable="false"
       :open="!!deployApp"
-      :title="`发布：${deployApp?.name ?? ''}（${deployApp?.hostIp ?? ''} ${deployApp?.dir ?? ''}）`"
+      :title="`发布：${deployApp?.name ?? ''}（${deployApp ? address(deployApp) : ''} ${deployApp?.dir ?? ''}）`"
       :width="620"
       @cancel="deploying || (deployApp = null)"
     >
       <Alert
         class="mb-4"
-        message="上传 bin、lib、conf、excel 打成的 zip（外面可以再包一层目录），由包里的 bin/app.sh 完成发布。停止前先检查包里的 Main-Class；发布前备份机器上的 bin、lib、conf、excel，可以用「回滚」恢复。不勾选覆盖配置时，机器上的 conf 保持不变，备份里仍留一份。程序在运行时会先停止，发布后重新启动。"
+        message="上传 bin、lib、conf、excel 打成的 zip（外面可以再包一层目录），由包里的 bin/app.sh 完成发布。停止前先检查包里的 Main-Class；发布前把机器上的 bin、lib、conf、excel 备份到程序目录的 backup/ 下。不勾选覆盖配置时，机器上的 conf 保持不变。程序在运行时会先停止，发布后重新启动。"
         show-icon
         type="info"
       />
@@ -968,43 +583,10 @@ function rollback(backup: string) {
       </template>
     </Modal>
 
-    <Modal
-      :footer="null"
-      :open="!!rollbackApp"
-      :title="`回滚：${rollbackApp?.name ?? ''}（${rollbackApp?.hostIp ?? ''} ${rollbackApp?.dir ?? ''}）`"
-      :width="620"
-      @cancel="rollbackApp = null"
-    >
-      <Alert
-        class="mb-4"
-        message="换回该次发布前备份的 conf、excel、lib、bin。当前这些目录会先再备份一份，所以还能回滚回来；程序原来在运行的会自动重启"
-        show-icon
-        type="info"
-      />
-      <List
-        :data-source="backups"
-        :loading="backupsLoading"
-        :locale="{ emptyText: '还没有可以回滚的版本' }"
-        bordered
-        size="small"
-      >
-        <template #renderItem="{ item }">
-          <ListItem>
-            <span class="font-mono">{{ backupTime(item) }}</span>
-            <template #actions>
-              <Button size="small" type="link" @click="rollback(item)">
-                回滚到此版本
-              </Button>
-            </template>
-          </ListItem>
-        </template>
-      </List>
-    </Modal>
-
     <TaskOutput
       :task-id="taskId"
       @close="taskId = null"
-      @finished="onTaskFinished"
+      @finished="gridApi.query()"
     />
   </Page>
 </template>

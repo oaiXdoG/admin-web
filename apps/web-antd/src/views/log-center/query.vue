@@ -152,6 +152,7 @@ function resultColumns(current?: LogDefinition) {
     {
       field: 'operation',
       fixed: 'right' as const,
+      resizable: false,
       slots: { default: 'detail' },
       title: '操作',
       width: 72,

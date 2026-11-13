@@ -115,6 +115,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       {
         field: 'operation',
         fixed: 'right',
+        resizable: false,
         slots: { default: 'action' },
         title: '操作',
         width: 140,
