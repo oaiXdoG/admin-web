@@ -171,7 +171,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
       {
         field: 'operation',
         fixed: 'right',
-        resizable: false,
         slots: { default: 'action' },
         title: '操作',
         width: 330,
@@ -402,13 +401,16 @@ async function deploy() {
   <Page auto-content-height>
     <Grid table-title="程序">
       <template #toolbar-actions>
-        <Select
-          v-model:value="ip"
-          :options="ipOptions"
-          allow-clear
-          class="ml-4 w-56"
-          placeholder="全部 IP"
-        />
+        <!-- ant-design 的 Select 自带 margin: 0，会盖过 ml-4，所以间距放在外层 -->
+        <div class="ml-4">
+          <Select
+            v-model:value="ip"
+            :options="ipOptions"
+            allow-clear
+            class="w-56"
+            placeholder="全部 IP"
+          />
+        </div>
       </template>
       <template #toolbar-tools>
         <Button

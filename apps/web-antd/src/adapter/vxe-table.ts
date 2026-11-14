@@ -21,7 +21,8 @@ setupVbenVxeTable({
         align: 'center',
         border: false,
         columnConfig: {
-          resizable: true,
+          // 列宽自动撑满表格；拖动调宽时空出的宽度会分给其他列，表现反常，所以不允许拖动
+          resizable: false,
         },
         minHeight: 180,
         formConfig: {
